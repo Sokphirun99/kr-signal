@@ -1,17 +1,79 @@
 import Layout from "@/components/Layout";
 import StatCard from "@/components/StatCard";
 import { trpc } from "@/providers/trpc";
+import { supabase } from "@/utils/supabase";
 import { Link } from "react-router";
+import { useState, useEffect } from "react";
 
 function pct(x: number | null): string {
   return x === null ? "—" : `${Math.round(x * 100)}%`;
 }
 
+function computeTrackFromSignals(signals: any[]) {
+  let closed = 0;
+  let wins = 0;
+  let nonWins = 0;
+  let totalR = 0;
+  let expired = 0;
+  let undecidable = 0;
+
+  for (const s of signals) {
+    const status = s.status;
+    const r = Number(s.rMultiple ?? s.r_multiple ?? 0);
+    if (status === "expired") {
+      expired++;
+    } else if (status === "undecidable") {
+      undecidable++;
+    } else if (["tp1", "tp2", "tp3", "sl", "be"].includes(status)) {
+      closed++;
+      totalR += r;
+      if (r > 0) wins++;
+      else nonWins++;
+    }
+  }
+
+  const winRate = closed > 0 ? wins / closed : null;
+  const avgR = closed > 0 ? Number((totalR / closed).toFixed(2)) : null;
+
+  return {
+    closed,
+    wins,
+    nonWins,
+    winRate,
+    totalR: Number(totalR.toFixed(2)),
+    avgR,
+    expired,
+    undecidable,
+    profitFactor: null,
+    bestStreak: 0,
+    currentStreak: 0,
+    byMonth: [],
+    byMarket: [],
+  };
+}
+
 export default function TrackRecord() {
-  const { data: tr, isLoading } = trpc.signals.trackRecord.useQuery(undefined, {
+  const { data: trpcTr, isLoading: isTrpcLoading } = trpc.signals.trackRecord.useQuery(undefined, {
     refetchInterval: 60_000,
   });
   const funnel = trpc.signals.funnel.useQuery();
+  const [supabaseSignals, setSupabaseSignals] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchFromSupabase() {
+      try {
+        const { data } = await supabase.from("signals").select("*").order("id", { ascending: false });
+        if (data) setSupabaseSignals(data);
+      } catch (err) {
+        console.error("Supabase fetch error:", err);
+      }
+    }
+    fetchFromSupabase();
+  }, []);
+
+  const fallbackTrack = computeTrackFromSignals(supabaseSignals);
+  const tr = trpcTr ?? (supabaseSignals.length > 0 ? fallbackTrack : undefined);
+  const isLoading = isTrpcLoading && supabaseSignals.length === 0;
 
   return (
     <Layout>
@@ -56,7 +118,7 @@ export default function TrackRecord() {
               />
             </div>
 
-            {tr.byMonth.length > 0 && (
+            {tr.byMonth && tr.byMonth.length > 0 && (
               <div className="mt-10 overflow-hidden rounded-xl border border-white/5">
                 <table className="w-full text-sm">
                   <thead>
@@ -68,7 +130,7 @@ export default function TrackRecord() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.byMonth.map((m) => (
+                    {tr.byMonth.map((m: any) => (
                       <tr key={m.month} className="border-b border-white/5 last:border-0">
                         <td className="px-5 py-3 font-mono text-zinc-300">{m.month}</td>
                         <td className="px-5 py-3 font-mono text-zinc-300">{m.closed}</td>
@@ -81,7 +143,7 @@ export default function TrackRecord() {
               </div>
             )}
 
-            {tr.byMarket.length > 0 && (
+            {tr.byMarket && tr.byMarket.length > 0 && (
               <div className="mt-6 overflow-hidden rounded-xl border border-white/5">
                 <table className="w-full text-sm">
                   <thead>
@@ -93,7 +155,7 @@ export default function TrackRecord() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.byMarket.map((m) => (
+                    {tr.byMarket.map((m: any) => (
                       <tr key={m.market} className="border-b border-white/5 last:border-0">
                         <td className="px-5 py-3 capitalize text-zinc-300">{m.market}</td>
                         <td className="px-5 py-3 font-mono text-zinc-300">{m.closed}</td>
