@@ -1,16 +1,11 @@
 import "dotenv/config";
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value && process.env.NODE_ENV === "production") {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value ?? "";
-}
+const DEFAULT_DB =
+  "postgresql://postgres.swldhqwcwijgngheaynf:RONvip012550017@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres";
 
 export const env = {
-  appId: required("APP_ID"),
-  appSecret: required("APP_SECRET"),
+  appId: process.env.APP_ID || "kr-signal",
+  appSecret: process.env.APP_SECRET || "dev-secret-key-12345",
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: required("DATABASE_URL"),
+  databaseUrl: process.env.DATABASE_URL || DEFAULT_DB,
 };

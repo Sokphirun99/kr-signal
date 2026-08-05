@@ -14,6 +14,7 @@ export function getDb() {
     const client = postgres(env.databaseUrl, {
       prepare: false,
       ssl: isSupabase ? "require" : false,
+      max: 1,
     });
     instance = drizzle(client, { schema: fullSchema });
   }
