@@ -1,8 +1,9 @@
 import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
+import { supabase } from "@/utils/supabase";
 import { INSTRUMENTS, type SignalStatus } from "@contracts/instruments";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] = [
@@ -15,6 +16,7 @@ const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] =
 export default function Signals() {
   const [symbol, setSymbol] = useState<string | undefined>();
   const [tab, setTab] = useState<"all" | SignalStatus | "closed">("all");
+  const [supabaseSignals, setSupabaseSignals] = useState<any[]>([]);
 
   const query = trpc.signals.list.useQuery(
     {
@@ -25,6 +27,26 @@ export default function Signals() {
     },
     { refetchInterval: 60_000 },
   );
+
+  useEffect(() => {
+    async function fetchFromSupabase() {
+      try {
+        let q = supabase.from("signals").select("*").order("id", { ascending: false });
+        if (symbol) q = q.eq("symbol", symbol);
+        if (tab !== "all" && tab !== "closed") q = q.eq("status", tab);
+        const { data, error } = await q;
+        if (data && !error) {
+          setSupabaseSignals(data);
+        }
+      } catch (err) {
+        console.error("Supabase fetch error:", err);
+      }
+    }
+    fetchFromSupabase();
+  }, [symbol, tab]);
+
+  const displaySignals = (query.data && query.data.length > 0) ? query.data : supabaseSignals;
+  const isLoading = query.isLoading && supabaseSignals.length === 0;
 
   return (
     <Layout>
@@ -79,18 +101,18 @@ export default function Signals() {
         </div>
 
         <div className="mt-8 grid gap-4">
-          {query.isLoading && (
+          {isLoading && (
             <p className="py-16 text-center text-sm text-zinc-500">
               Loading the ledger…
             </p>
           )}
-          {query.data?.length === 0 && (
+          {!isLoading && displaySignals.length === 0 && (
             <p className="rounded-xl border border-dashed border-white/10 py-16 text-center text-sm text-zinc-500">
               No signals match this filter yet. The gate only publishes when a
               setup clears every check — an empty feed is the gate doing its job.
             </p>
           )}
-          {query.data?.map((s) => <SignalCard key={s.id} signal={s} />)}
+          {displaySignals.map((s) => <SignalCard key={s.id} signal={s} />)}
         </div>
       </section>
     </Layout>
