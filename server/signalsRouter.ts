@@ -21,37 +21,50 @@ export const signalsRouter = createRouter({
         .optional(),
     )
     .query(async ({ input }) => {
-      await ensureFresh();
+      await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
       return listSignals(input ?? {});
     }),
 
   /** Verified track record — computed only from market-graded outcomes */
   trackRecord: publicQuery.query(async () => {
-    await ensureFresh();
+    await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
     return computeTrackRecord();
   }),
 
   /** Audit funnel: scanned → candidate → published over the last 7 days */
   funnel: publicQuery.query(async () => {
-    await ensureFresh();
+    await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
     return computeFunnel(7);
   }),
 
   /** Live ticker tape across all instruments */
   ticker: publicQuery.query(async () => {
-    const tickers = await fetchAllTickers(INSTRUMENTS.map((i) => i.pair));
-    return INSTRUMENTS.map((inst) => {
-      const t = tickers.find((x) => x.pair === inst.pair);
-      return {
+    try {
+      const tickers = await fetchAllTickers(INSTRUMENTS.map((i) => i.pair));
+      return INSTRUMENTS.map((inst) => {
+        const t = tickers.find((x) => x.pair === inst.pair);
+        return {
+          symbol: inst.symbol,
+          name: inst.name,
+          market: inst.market,
+          decimals: inst.decimals,
+          basisNote: inst.basisNote ?? null,
+          lastPrice: t?.lastPrice ?? null,
+          priceChangePct: t?.priceChangePct ?? null,
+          quoteVolume: t?.quoteVolume ?? null,
+        };
+      });
+    } catch {
+      return INSTRUMENTS.map((inst) => ({
         symbol: inst.symbol,
         name: inst.name,
         market: inst.market,
         decimals: inst.decimals,
         basisNote: inst.basisNote ?? null,
-        lastPrice: t?.lastPrice ?? null,
-        priceChangePct: t?.priceChangePct ?? null,
-        quoteVolume: t?.quoteVolume ?? null,
-      };
-    });
+        lastPrice: null,
+        priceChangePct: null,
+        quoteVolume: null,
+      }));
+    }
   }),
 });

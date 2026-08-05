@@ -13,8 +13,9 @@ export function getDb() {
     const isSupabase = env.databaseUrl.includes("supabase");
     const client = postgres(env.databaseUrl, {
       prepare: false,
-      ssl: isSupabase ? "require" : false,
+      ssl: isSupabase ? { rejectUnauthorized: false } : false,
       max: 1,
+      connect_timeout: 10,
     });
     instance = drizzle(client, { schema: fullSchema });
   }
