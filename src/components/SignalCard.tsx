@@ -1,9 +1,9 @@
-import { formatPrice, getInstrument, type SignalStatus } from "@contracts/instruments";
+import { formatPrice, getInstrument } from "@contracts/instruments";
 import type { Signal } from "@db/schema";
 import { cn } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, Clock } from "lucide-react";
 
-const STATUS_STYLE: Record<SignalStatus, { label: string; cls: string }> = {
+const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
   open: { label: "Live", cls: "bg-sky-500/15 text-sky-400" },
   tp1: { label: "TP1 hit", cls: "bg-emerald-500/15 text-emerald-400" },
   tp2: { label: "TP2 hit", cls: "bg-emerald-500/15 text-emerald-400" },
@@ -23,7 +23,7 @@ function Level({ label, value, decimals }: { label: string; value: number; decim
   );
 }
 
-function timeLeft(expiresAt: Date): string {
+function timeLeft(expiresAt: Date | string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return "expired";
   const h = Math.floor(ms / 3_600_000);
@@ -33,13 +33,28 @@ function timeLeft(expiresAt: Date): string {
   return `${h}h ${m}m left`;
 }
 
-export default function SignalCard({ signal }: { signal: Signal }) {
+export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
+  const signal = {
+    ...raw,
+    entry: Number(raw.entry ?? 0),
+    stopLoss: Number(raw.stopLoss ?? raw.stop_loss ?? 0),
+    tp1: Number(raw.tp1 ?? 0),
+    tp2: Number(raw.tp2 ?? 0),
+    tp3: Number(raw.tp3 ?? 0),
+    rMultiple: raw.rMultiple ?? raw.r_multiple ?? null,
+    exitPrice: raw.exitPrice ?? raw.exit_price ?? null,
+    openedAt: raw.openedAt ?? raw.opened_at ?? new Date(),
+    expiresAt: raw.expiresAt ?? raw.expires_at ?? new Date(),
+    closedAt: raw.closedAt ?? raw.closed_at ?? null,
+  };
+
   const inst = getInstrument(signal.symbol);
   const decimals = inst?.decimals ?? 2;
-  const st = STATUS_STYLE[signal.status];
+  const st = STATUS_STYLE[signal.status] ?? { label: signal.status, cls: "bg-zinc-500/15 text-zinc-400" };
   const isBuy = signal.side === "buy";
-  const rr =
-    Math.abs(signal.tp1 - signal.entry) / Math.abs(signal.entry - signal.stopLoss);
+  const stopDiff = Math.abs(signal.entry - signal.stopLoss);
+  const rr = stopDiff > 0 ? Math.abs(signal.tp1 - signal.entry) / stopDiff : 0;
+  const rMult = typeof signal.rMultiple === "number" ? signal.rMultiple : null;
 
   return (
     <div className="rounded-xl border border-white/5 bg-white/[0.03] p-5 transition-colors hover:border-white/10">
@@ -62,7 +77,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
               <span className={cn("font-medium", isBuy ? "text-emerald-400" : "text-red-400")}>
-                {signal.side.toUpperCase()}
+                {signal.side?.toUpperCase()}
               </span>
               <span>·</span>
               <span className="capitalize">{signal.style} setup</span>
@@ -104,19 +119,19 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             <Clock className="h-3 w-3" />
             {timeLeft(signal.expiresAt)}
           </span>
-        ) : signal.rMultiple !== null ? (
+        ) : rMult !== null ? (
           <span
             className={cn(
               "font-mono font-medium",
-              signal.rMultiple > 0
+              rMult > 0
                 ? "text-emerald-400"
-                : signal.rMultiple < 0
+                : rMult < 0
                   ? "text-red-400"
                   : "text-zinc-400",
             )}
           >
-            {signal.rMultiple > 0 ? "+" : ""}
-            {signal.rMultiple.toFixed(2)}R
+            {rMult > 0 ? "+" : ""}
+            {rMult.toFixed(2)}R
           </span>
         ) : null}
       </div>
