@@ -3,6 +3,7 @@ import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
 import { supabase } from "@/utils/supabase";
 import { INSTRUMENTS, type SignalStatus } from "@contracts/instruments";
+import type { Signal } from "@db/schema";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,7 @@ const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] =
 export default function Signals() {
   const [symbol, setSymbol] = useState<string | undefined>();
   const [tab, setTab] = useState<"all" | SignalStatus | "closed">("all");
-  const [supabaseSignals, setSupabaseSignals] = useState<any[]>([]);
+  const [supabaseSignals, setSupabaseSignals] = useState<Signal[]>([]);
 
   const query = trpc.signals.list.useQuery(
     {
@@ -32,11 +33,17 @@ export default function Signals() {
     async function fetchFromSupabase() {
       try {
         let q = supabase.from("signals").select("*").order("id", { ascending: false });
-        if (symbol) q = q.eq("symbol", symbol);
-        if (tab !== "all" && tab !== "closed") q = q.eq("status", tab);
+        if (symbol) {
+          q = q.eq("symbol", symbol);
+        }
+        if (tab === "closed") {
+          q = q.not("status", "in", "(open,expired)");
+        } else if (tab !== "all") {
+          q = q.eq("status", tab);
+        }
         const { data, error } = await q;
         if (data && !error) {
-          setSupabaseSignals(data);
+          setSupabaseSignals(data as unknown as Signal[]);
         }
       } catch (err) {
         console.error("Supabase fetch error:", err);
@@ -112,7 +119,9 @@ export default function Signals() {
               setup clears every check — an empty feed is the gate doing its job.
             </p>
           )}
-          {displaySignals.map((s) => <SignalCard key={s.id} signal={s} />)}
+          {displaySignals.map((s) => (
+            <SignalCard key={s.id} signal={s} />
+          ))}
         </div>
       </section>
     </Layout>
