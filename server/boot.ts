@@ -9,6 +9,9 @@ import { env } from "./lib/env";
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+
+app.get("/api/health", (c) => c.json({ ok: true }));
+
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
@@ -17,6 +20,12 @@ app.use("/api/trpc/*", async (c) => {
     createContext,
   });
 });
+
+app.onError((err, c) => {
+  console.error("Hono error:", err);
+  return c.json({ error: String(err.message || err), stack: err.stack }, 500);
+});
+
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
