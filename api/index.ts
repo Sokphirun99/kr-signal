@@ -1,5 +1,6 @@
 import { handle } from "@hono/node-server/vercel";
-import app from "../server/boot";
+// @ts-ignore
+import app from "../dist/boot.js";
 
 const vercelHandler = handle(app);
 
