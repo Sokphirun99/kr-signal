@@ -44,3 +44,39 @@ export async function fetchFundingRate(symbol: string): Promise<number | null> {
     clearTimeout(timer);
   }
 }
+
+interface OiCacheEntry {
+  openInterest: number | null;
+  fetchedAt: number;
+}
+
+const oiCache = new Map<string, OiCacheEntry>();
+
+export async function fetchOpenInterest(symbol: string): Promise<number | null> {
+  const cached = oiCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.openInterest;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `${FAPI_BASE}/fapi/v1/openInterest?symbol=${symbol}`,
+      { signal: controller.signal },
+    );
+    if (!res.ok) throw new Error(`Binance Futures OI HTTP ${res.status}`);
+    const data = (await res.json()) as { openInterest: string };
+    const openInterest = Number(data.openInterest);
+    if (Number.isNaN(openInterest)) throw new Error("Invalid OI value");
+
+    oiCache.set(symbol, { openInterest, fetchedAt: Date.now() });
+    return openInterest;
+  } catch {
+    oiCache.set(symbol, { openInterest: null, fetchedAt: Date.now() });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+

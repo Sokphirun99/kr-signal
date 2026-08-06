@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
-import { INSTRUMENTS, type SignalStatus } from "@contracts/instruments";
+import { INSTRUMENTS, type SignalStatus, type Market } from "@contracts/instruments";
 import { cn } from "@/lib/utils";
 
 function SignalCardSkeleton() {
@@ -40,10 +40,17 @@ function SignalCardSkeleton() {
 }
 
 const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All Statuses" },
   { value: "open", label: "Live" },
   { value: "closed", label: "Graded" },
   { value: "expired", label: "Expired" },
+];
+
+const MARKET_TABS: { value: Market | "all"; label: string }[] = [
+  { value: "all", label: "All Markets" },
+  { value: "crypto", label: "Crypto" },
+  { value: "gold", label: "Gold" },
+  { value: "forex", label: "Forex" },
 ];
 
 export default function Signals() {
@@ -51,6 +58,7 @@ export default function Signals() {
     document.title = "Live Signal Feed — KR-Signal";
   }, []);
 
+  const [marketCategory, setMarketCategory] = useState<Market | "all">("all");
   const [symbol, setSymbol] = useState<string | undefined>();
   const [tab, setTab] = useState<"all" | SignalStatus | "closed">("all");
 
@@ -70,7 +78,18 @@ export default function Signals() {
     closedOnly: tab === "closed",
   });
 
-  const displaySignals = query.data && query.data.length > 0 ? query.data : supabaseSignals;
+  const rawSignals = query.data && query.data.length > 0 ? query.data : supabaseSignals;
+
+  const displaySignals = useMemo(() => {
+    if (marketCategory === "all") return rawSignals;
+    return rawSignals.filter((s) => s.market === marketCategory);
+  }, [rawSignals, marketCategory]);
+
+  const filteredInstruments = useMemo(() => {
+    if (marketCategory === "all") return INSTRUMENTS;
+    return INSTRUMENTS.filter((i) => i.market === marketCategory);
+  }, [marketCategory]);
+
   const isLoading = query.isLoading && supabaseSignals.length === 0;
 
   return (
@@ -90,47 +109,75 @@ export default function Signals() {
         </div>
 
         {/* Filter Controls */}
-        <div className="mt-8 flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
-          {STATUS_TABS.map((t) => (
+        <div className="mt-8 space-y-3 border-b border-white/10 pb-5">
+          {/* Top Row: Status & Market Category Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Status:</span>
+            {STATUS_TABS.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setTab(t.value)}
+                className={cn(
+                  "rounded-full border px-3.5 py-1 text-xs font-medium transition-all",
+                  tab === t.value
+                    ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-2xs"
+                    : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+
+            <span className="mx-2 h-4 w-px bg-white/10" />
+
+            <span className="mr-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Category:</span>
+            {MARKET_TABS.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => {
+                  setMarketCategory(m.value);
+                  setSymbol(undefined);
+                }}
+                className={cn(
+                  "rounded-full border px-3.5 py-1 text-xs font-medium transition-all",
+                  marketCategory === m.value
+                    ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-2xs"
+                    : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Bottom Row: Individual Asset Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <button
-              key={t.value}
-              onClick={() => setTab(t.value)}
+              onClick={() => setSymbol(undefined)}
               className={cn(
-                "rounded-full border px-4 py-1.5 text-xs font-medium transition-all",
-                tab === t.value
-                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-2xs"
+                "rounded-md border px-3 py-1 font-mono text-xs font-medium transition-all",
+                !symbol
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
                   : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
               )}
             >
-              {t.label}
+              All Assets
             </button>
-          ))}
-          <span className="mx-1 h-5 w-px bg-white/10" />
-          <button
-            onClick={() => setSymbol(undefined)}
-            className={cn(
-              "rounded-full border px-4 py-1.5 font-mono text-xs font-medium transition-all",
-              !symbol
-                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-2xs"
-                : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
-            )}
-          >
-            All markets
-          </button>
-          {INSTRUMENTS.map((i) => (
-            <button
-              key={i.symbol}
-              onClick={() => setSymbol(i.symbol)}
-              className={cn(
-                "rounded-full border px-3.5 py-1.5 font-mono text-xs font-medium transition-all",
-                symbol === i.symbol
-                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-2xs"
-                  : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              {i.symbol}
-            </button>
-          ))}
+            {filteredInstruments.map((i) => (
+              <button
+                key={i.symbol}
+                onClick={() => setSymbol(i.symbol)}
+                className={cn(
+                  "rounded-md border px-3 py-1 font-mono text-xs font-medium transition-all",
+                  symbol === i.symbol
+                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                    : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                {i.symbol}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Signal Cards Feed */}

@@ -6,7 +6,7 @@ import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
 import { Link } from "react-router";
-import { ArrowRight, ShieldCheck, Eye, Scale, Bell, CheckCircle2 } from "lucide-react";
+import { ArrowRight, ShieldCheck, Eye, Scale } from "lucide-react";
 
 export default function Home() {
   useEffect(() => {
@@ -169,22 +169,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      {/* Conversion / Alerts CTA Section */}
-      <section className="mt-16 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 via-zinc-900/60 to-zinc-950 p-8 text-center sm:p-10 shadow-lg">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-          <Bell className="h-6 w-6" />
-        </div>
-        <h3 className="mt-4 text-2xl font-semibold text-white">Never miss a published setup</h3>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-400 leading-relaxed">
-          Every setup that clears our rule-engine gate is logged instantly. Telegram bot alerts and real-time push notifications are rolling out.
-        </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-zinc-300">
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Instant execution entry</span>
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Precise TP & SL levels</span>
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> 100% public ledger</span>
-        </div>
-      </section>
     </Layout>
   );
 }

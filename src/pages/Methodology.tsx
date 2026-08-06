@@ -1,13 +1,38 @@
 import { useEffect } from "react";
 import Layout from "@/components/Layout";
+import { Info } from "lucide-react";
 
 const QUICK_RULES = [
-  { label: "Confidence Floor", value: "60%" },
-  { label: "Minimum Target", value: "≥ 1.4R" },
-  { label: "Same-Candle Rule", value: "Stop First" },
-  { label: "Gap-Through", value: "Graded at Open" },
-  { label: "After TP1", value: "Break-Even" },
-  { label: "After TP2", value: "2.5× ATR Trail" },
+  {
+    label: "Confidence Floor",
+    value: "60%",
+    tooltip: "Candidates must score ≥60% algorithmic confidence to clear the gate and publish.",
+  },
+  {
+    label: "Minimum Target",
+    value: "≥ 1.4R",
+    tooltip: "Target 1 must yield at least 1.4× the risk distance (R) before publishing.",
+  },
+  {
+    label: "Same-Candle Rule",
+    value: "Stop First",
+    tooltip: "If TP & SL are hit inside the same candle, counted conservatively as Stop-loss first.",
+  },
+  {
+    label: "Gap-Through",
+    value: "Graded at Open",
+    tooltip: "If market gaps past a stop price, trade exit is graded at the candle's open price.",
+  },
+  {
+    label: "After TP1",
+    value: "Break-Even",
+    tooltip: "Once Target 1 is touched, stop-loss automatically moves to entry price (0R risk).",
+  },
+  {
+    label: "After TP2",
+    value: "2.5× ATR Trail",
+    tooltip: "Once Target 2 is touched, a dynamic 2.5× ATR trailing stop locks in trend profit.",
+  },
 ];
 
 const SECTIONS: { title: string; body: string[] }[] = [
@@ -75,11 +100,22 @@ export default function Methodology() {
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 font-mono text-xs">
             {QUICK_RULES.map((r) => (
-              <div key={r.label} className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                <span className="block text-[10px] font-sans uppercase tracking-wider text-zinc-400 font-medium">
-                  {r.label}
-                </span>
+              <div
+                key={r.label}
+                className="group relative rounded-lg border border-white/10 bg-black/40 p-2.5 transition-colors hover:border-emerald-500/40 hover:bg-black/60 cursor-help"
+                title={r.tooltip}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="block text-[10px] font-sans uppercase tracking-wider text-zinc-400 font-medium truncate">
+                    {r.label}
+                  </span>
+                  <Info className="h-3 w-3 shrink-0 text-zinc-500 transition-colors group-hover:text-emerald-400" />
+                </div>
                 <span className="mt-1 block font-bold text-emerald-300 tabular-nums">{r.value}</span>
+                <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 w-48 rounded-md border border-zinc-800 bg-zinc-900 p-2 text-[11px] font-sans text-zinc-300 shadow-xl group-hover:block z-20">
+                  {r.tooltip}
+                  <div className="absolute top-full left-1/2 -ml-1 border-4 border-transparent border-t-zinc-900" />
+                </div>
               </div>
             ))}
           </div>

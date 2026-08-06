@@ -50,7 +50,7 @@ export function scoreSetup(
     const sep = Math.abs(emaFast - emaSlow) / setup.context.atr;
     score += Math.min(8, Math.round(sep * 4));
 
-    if (setup.context.squeeze >= 20) {
+    if (setup.context.squeeze >= 20 || setup.context.ttmSqueeze) {
       score += 10;
     }
 
@@ -62,10 +62,14 @@ export function scoreSetup(
     }
   }
 
-
-  // Volume confirmation for range setups
-  if (setup.style === "range" && !options?.ignoreVolume) {
-    if (rvol >= 1.5) score += 6;
+  // Volume & Bollinger percentB confirmation for range setups
+  if (setup.style === "range") {
+    if (!options?.ignoreVolume && rvol >= 1.5) score += 6;
+    if (setup.context.percentB != null) {
+      // Overextended range boundaries bonus
+      if (setup.side === "buy" && setup.context.percentB <= 0.15) score += 6;
+      else if (setup.side === "sell" && setup.context.percentB >= 0.85) score += 6;
+    }
   }
 
   // Funding rate sentiment for crypto instruments
@@ -79,7 +83,6 @@ export function scoreSetup(
   }
 
   return Math.max(40, Math.min(90, score));
-
 }
 
 /**

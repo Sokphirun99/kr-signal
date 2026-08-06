@@ -69,16 +69,33 @@ export async function fetchKlines(
   }));
 }
 
+interface KlineCacheEntry {
+  candles: Candle[];
+  fetchedAt: number;
+}
+
+const klineCache = new Map<string, KlineCacheEntry>();
+const KLINE_CACHE_TTL_MS = 30_000; // 30 seconds
+
 /** Klines with the still-forming final candle removed */
 export async function fetchClosedKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
 ): Promise<Candle[]> {
+  const cacheKey = `${pair}:${interval}:${limit}`;
+  const cached = klineCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_TTL_MS) {
+    return cached.candles;
+  }
+
   const candles = await fetchKlines(pair, interval, limit);
   const tfMs = { "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000 }[interval];
   const now = Date.now();
-  return candles.filter((c) => c.openTime + tfMs <= now);
+  const closed = candles.filter((c) => c.openTime + tfMs <= now);
+
+  klineCache.set(cacheKey, { candles: closed, fetchedAt: Date.now() });
+  return closed;
 }
 
 export async function fetchTicker24h(pair: string): Promise<Ticker24h> {

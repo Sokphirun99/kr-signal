@@ -142,4 +142,99 @@ export function squeezeLength(
   return countPrior;
 }
 
+/**
+ * Session VWAP (Volume Weighted Average Price) calculation.
+ * Returns aligned array of cumulative volume-weighted average prices.
+ */
+export function vwapSeries(candles: Candle[]): (number | null)[] {
+  const out: (number | null)[] = new Array(candles.length).fill(null);
+  let cumVolume = 0;
+  let cumTypicalVolume = 0;
+
+  for (let i = 0; i < candles.length; i++) {
+    const { high, low, close, volume } = candles[i];
+    const typicalPrice = (high + low + close) / 3;
+    cumTypicalVolume += typicalPrice * volume;
+    cumVolume += volume;
+    out[i] = cumVolume > 0 ? cumTypicalVolume / cumVolume : null;
+  }
+  return out;
+}
+
+export interface BollingerBandsResult {
+  upper: (number | null)[];
+  middle: (number | null)[];
+  lower: (number | null)[];
+  percentB: (number | null)[];
+}
+
+/**
+ * Bollinger Bands calculation.
+ */
+export function bollingerBandsSeries(
+  closes: number[],
+  period = 20,
+  stdDevMult = 2.0,
+): BollingerBandsResult {
+  const upper: (number | null)[] = new Array(closes.length).fill(null);
+  const middle: (number | null)[] = new Array(closes.length).fill(null);
+  const lower: (number | null)[] = new Array(closes.length).fill(null);
+  const percentB: (number | null)[] = new Array(closes.length).fill(null);
+
+  if (closes.length < period) {
+    return { upper, middle, lower, percentB };
+  }
+
+  for (let i = period - 1; i < closes.length; i++) {
+    const slice = closes.slice(i - period + 1, i + 1);
+    const mean = slice.reduce((a, b) => a + b, 0) / period;
+    const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
+    const stdDev = Math.sqrt(variance);
+
+    const u = mean + stdDev * stdDevMult;
+    const l = mean - stdDev * stdDevMult;
+
+    middle[i] = mean;
+    upper[i] = u;
+    lower[i] = l;
+    percentB[i] = u === l ? 0.5 : (closes[i] - l) / (u - l);
+  }
+
+  return { upper, middle, lower, percentB };
+}
+
+/**
+ * TTM Squeeze check: Bollinger Bands inside Keltner Channels.
+ * Returns true for candle indices where BB upper <= KC upper and BB lower >= KC lower.
+ */
+export function ttmSqueezeSeries(
+  candles: Candle[],
+  bbPeriod = 20,
+  atrPeriod = 14,
+): boolean[] {
+  const closes = candles.map((c) => c.close);
+  const bb = bollingerBandsSeries(closes, bbPeriod, 2.0);
+  const atr = atrSeries(candles, atrPeriod);
+  const ema = emaSeries(closes, bbPeriod);
+
+  const squeeze: boolean[] = new Array(candles.length).fill(false);
+
+  for (let i = 0; i < candles.length; i++) {
+    const bbu = bb.upper[i];
+    const bbl = bb.lower[i];
+    const e = ema[i];
+    const a = atr[i];
+
+    if (bbu !== null && bbl !== null && e !== null && a !== null) {
+      // Keltner Channel bounds (EMA +/- 1.5 * ATR)
+      const kcu = e + 1.5 * a;
+      const kcl = e - 1.5 * a;
+      // Bollinger Bands inside Keltner Channels
+      squeeze[i] = bbu <= kcu && bbl >= kcl;
+    }
+  }
+
+  return squeeze;
+}
+
 

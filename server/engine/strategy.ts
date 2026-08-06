@@ -7,7 +7,17 @@
  */
 
 import type { Candle } from "./binance";
-import { emaSeries, atrSeries, rsiSeries, swingLevels, atrPercentile, squeezeLength } from "./indicators";
+import {
+  emaSeries,
+  atrSeries,
+  rsiSeries,
+  swingLevels,
+  atrPercentile,
+  squeezeLength,
+  vwapSeries,
+  bollingerBandsSeries,
+  ttmSqueezeSeries,
+} from "./indicators";
 import type { StrategyStyle, TradeSide, Timeframe } from "@contracts/instruments";
 
 export let SQUEEZE_BREAKOUT = false;
@@ -39,6 +49,10 @@ export interface Setup {
     squeeze: number;
     distributionPullback?: boolean;
     fundingRate?: number | null;
+    vwap?: number | null;
+    percentB?: number | null;
+    ttmSqueeze?: boolean;
+    openInterest?: number | null;
   };
 }
 
@@ -53,6 +67,7 @@ export function generateSetup(
   candles: Candle[],
   timeframe: Timeframe,
   fundingRate?: number | null,
+  openInterest?: number | null,
 ): Setup | null {
   if (candles.length < 120) return null;
 
@@ -117,6 +132,14 @@ export function generateSetup(
     }
   }
 
+  const vwaps = vwapSeries(candles);
+  const bb = bollingerBandsSeries(closes, 20, 2.0);
+  const ttmSqueezes = ttmSqueezeSeries(candles, 20, 14);
+
+  const currentVwap = vwaps[i];
+  const currentPercentB = bb.percentB[i];
+  const currentTtmSqueeze = ttmSqueezes[i];
+
   const base = {
     timeframe,
     setupAt: candle.openTime,
@@ -131,6 +154,10 @@ export function generateSetup(
       squeeze,
       distributionPullback,
       fundingRate: fundingRate ?? null,
+      vwap: currentVwap,
+      percentB: currentPercentB,
+      ttmSqueeze: currentTtmSqueeze,
+      openInterest: openInterest ?? null,
     },
   };
 

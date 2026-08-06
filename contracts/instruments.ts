@@ -44,6 +44,12 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "BTCUSDT", name: "Bitcoin", market: "crypto", pair: "BTCUSDT", decimals: 1 },
   { symbol: "ETHUSDT", name: "Ethereum", market: "crypto", pair: "ETHUSDT", decimals: 2 },
   { symbol: "SOLUSDT", name: "Solana", market: "crypto", pair: "SOLUSDT", decimals: 2 },
+  { symbol: "BNBUSDT", name: "BNB", market: "crypto", pair: "BNBUSDT", decimals: 2 },
+  { symbol: "XRPUSDT", name: "XRP", market: "crypto", pair: "XRPUSDT", decimals: 4 },
+  { symbol: "DOGEUSDT", name: "Dogecoin", market: "crypto", pair: "DOGEUSDT", decimals: 4 },
+  { symbol: "ADAUSDT", name: "Cardano", market: "crypto", pair: "ADAUSDT", decimals: 4 },
+  { symbol: "AVAXUSDT", name: "Avalanche", market: "crypto", pair: "AVAXUSDT", decimals: 2 },
+  { symbol: "NEARUSDT", name: "NEAR Protocol", market: "crypto", pair: "NEARUSDT", decimals: 3 },
   {
     symbol: "XAUUSD",
     name: "Gold",
