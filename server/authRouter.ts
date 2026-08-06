@@ -89,7 +89,16 @@ export const authRouter = createRouter({
    * Log in to an existing account.
    */
   login: publicQuery.input(loginSchema).mutation(async ({ input, ctx }) => {
-    const user = await findUserByEmail(input.email);
+    let user;
+    try {
+      user = await findUserByEmail(input.email);
+    } catch (err: any) {
+      console.error("Login DB lookup error:", err);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database connection failed. Please check connection configuration.",
+      });
+    }
 
     if (!user) {
       throw new TRPCError({
@@ -118,39 +127,51 @@ export const authRouter = createRouter({
     const isValidPassword = await verifyPassword(input.password, user.passwordHash);
 
     if (!isValidPassword) {
-      await recordFailedLogin(user);
+      try {
+        await recordFailedLogin(user);
+      } catch (err) {
+        console.error("Record failed login error:", err);
+      }
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "Invalid email or password.",
       });
     }
 
-    await resetFailedLogin(user.id);
+    try {
+      await resetFailedLogin(user.id);
 
-    const duration = input.rememberMe
-      ? SESSION_DURATION_REMEMBER
-      : SESSION_DURATION_NORMAL;
-    const token = generateSessionToken();
-    const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + duration);
+      const duration = input.rememberMe
+        ? SESSION_DURATION_REMEMBER
+        : SESSION_DURATION_NORMAL;
+      const token = generateSessionToken();
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date(Date.now() + duration);
 
-    await createSession({
-      userId: user.id,
-      tokenHash,
-      ipAddress: ctx.req.headers.get("x-forwarded-for") ?? undefined,
-      userAgent: ctx.req.headers.get("user-agent") ?? undefined,
-      expiresAt,
-    });
+      await createSession({
+        userId: user.id,
+        tokenHash,
+        ipAddress: ctx.req.headers.get("x-forwarded-for") ?? undefined,
+        userAgent: ctx.req.headers.get("user-agent") ?? undefined,
+        expiresAt,
+      });
 
-    const cookieHeader = buildSessionCookie(token, duration / 1000);
-    ctx.resHeaders.append("Set-Cookie", cookieHeader);
+      const cookieHeader = buildSessionCookie(token, duration / 1000);
+      ctx.resHeaders.append("Set-Cookie", cookieHeader);
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    };
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      };
+    } catch (err: any) {
+      console.error("Login session creation error:", err);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create session. Please try again.",
+      });
+    }
   }),
 
   /**

@@ -5,16 +5,34 @@ import * as schema from "@db/schema";
 
 let instance: ReturnType<typeof drizzle<typeof schema>>;
 
+export function formatSupabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  let url = rawUrl;
+
+  // Convert direct host db.<ref>.supabase.co:5432 to transaction pooler
+  const directMatch = url.match(
+    /postgresql:\/\/postgres:(.+?)@db\.([a-z0-9]+)\.supabase\.co(?::5432)?\/postgres/,
+  );
+  if (directMatch) {
+    const password = directMatch[1];
+    const projectRef = directMatch[2];
+    url = `postgresql://postgres.${projectRef}:${password}@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`;
+  }
+
+  // Convert pooler 5432 -> 6543
+  if (url.includes("pooler.supabase.com:5432")) {
+    url = url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
+  }
+
+  return url;
+}
+
 export function getDb() {
   if (!instance) {
     if (!env.databaseUrl) {
       throw new Error("DATABASE_URL environment variable is missing.");
     }
-    let dbUrl = env.databaseUrl;
-    if (dbUrl.includes("pooler.supabase.com:5432")) {
-      dbUrl = dbUrl.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
-    }
-
+    const dbUrl = formatSupabaseUrl(env.databaseUrl);
     const isSupabase = dbUrl.includes("supabase") || dbUrl.includes("pooler");
     const isProd = env.isProduction || Boolean(process.env.VERCEL);
     const useSsl = isSupabase || isProd;
