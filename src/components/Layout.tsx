@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Activity, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { UserMenu } from "@/components/UserMenu";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -29,9 +28,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          {/* Right Actions: Desktop Nav + User Menu */}
+          {/* Right Actions: Desktop Nav */}
           <div className="flex items-center gap-4">
-            {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-1.5 text-sm">
               {NAV.map((n) => (
                 <Link
@@ -49,8 +47,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
 
-            <UserMenu />
-
             {/* Mobile Menu Toggle Button */}
             <button
               type="button"
@@ -63,7 +59,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </div>
-
 
         {/* Mobile Dropdown Menu */}
         {mobileOpen && (
