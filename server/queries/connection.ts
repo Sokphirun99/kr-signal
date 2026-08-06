@@ -10,11 +10,16 @@ export function getDb() {
     if (!env.databaseUrl) {
       throw new Error("DATABASE_URL environment variable is missing.");
     }
-    const isSupabase = env.databaseUrl.includes("supabase") || env.databaseUrl.includes("pooler");
+    let dbUrl = env.databaseUrl;
+    if (dbUrl.includes("pooler.supabase.com:5432")) {
+      dbUrl = dbUrl.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
+    }
+
+    const isSupabase = dbUrl.includes("supabase") || dbUrl.includes("pooler");
     const isProd = env.isProduction || Boolean(process.env.VERCEL);
     const useSsl = isSupabase || isProd;
 
-    const client = postgres(env.databaseUrl, {
+    const client = postgres(dbUrl, {
       prepare: false,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
       max: 1,
