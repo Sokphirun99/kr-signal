@@ -15,8 +15,10 @@ const SECTIONS: { title: string; body: string[] }[] = [
       "When a stop and a target fall inside the same candle, the conservative reading wins: stop first. The tape cannot tell us the intra-candle order, so we never grade in our own favor.",
       "If a candle opens beyond a stop — a gap straight through the level — the exit is graded at the candle's open price, not at the stop. Slippage counts against the record, so a stop-out can land slightly worse than -1R.",
       "After the first target is touched, the stop moves to break-even. A later reversal then closes the signal at 0R instead of a loss.",
+      "After the second target is touched, the fixed third target is replaced with a dynamic 2.5×ATR trailing stop (ratcheted strictly in the trade's favor), graded the same conservative way on any trail breach.",
     ],
   },
+
   {
     title: "What enters the win rate — and what never does",
     body: [

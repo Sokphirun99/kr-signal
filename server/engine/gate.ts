@@ -22,8 +22,12 @@ export const CONFIDENCE_FLOOR = 60;
  * (When the AI council ships, its score replaces this while the schema's
  * `engine` column records which one produced the signal.)
  */
-export function scoreSetup(setup: Setup): number {
-  const { rsi, atrPct, regime, emaFast, emaSlow } = setup.context;
+export function scoreSetup(
+  setup: Setup,
+  options?: { ignoreVolume?: boolean },
+): number {
+  const { rsi, atrPct, regime, emaFast, emaSlow, rvol, distributionPullback } =
+    setup.context;
   let score = 50;
 
   // Regime alignment: trend setup in trending regime (and vice versa)
@@ -45,20 +49,67 @@ export function scoreSetup(setup: Setup): number {
   if (setup.style === "trend") {
     const sep = Math.abs(emaFast - emaSlow) / setup.context.atr;
     score += Math.min(8, Math.round(sep * 4));
+
+    if (setup.context.squeeze >= 20) {
+      score += 10;
+    }
+
+    if (!options?.ignoreVolume) {
+      if (rvol >= 1.2) score += 8;
+      else if (rvol < 0.6) score -= 10;
+
+      if (distributionPullback) score -= 8;
+    }
+  }
+
+
+  // Volume confirmation for range setups
+  if (setup.style === "range" && !options?.ignoreVolume) {
+    if (rvol >= 1.5) score += 6;
+  }
+
+  // Funding rate sentiment for crypto instruments
+  const funding = setup.context.fundingRate;
+  if (funding != null) {
+    if (funding > 0.0005) {
+      score += setup.side === "buy" ? -10 : 5;
+    } else if (funding < -0.0005) {
+      score += setup.side === "buy" ? 5 : -10;
+    }
   }
 
   return Math.max(40, Math.min(90, score));
+
 }
 
 /**
  * Gates a candidate setup. Returns pass/fail with audit reasons.
  * `openSignalsExist` enforces one open signal per symbol+timeframe+side.
  */
-export function gateSetup(setup: Setup, openSignalsExist: boolean): GateResult {
+export function gateSetup(
+  setup: Setup,
+  openSignalsExist: boolean,
+  options?: { ignoreVolume?: boolean; ignoreOffHours?: boolean },
+): GateResult {
   const reasons: string[] = [];
-  const confidence = scoreSetup(setup);
+  const confidence = scoreSetup(setup, options);
 
   if (openSignalsExist) reasons.push("cooldown: an open signal already exists for this market/direction");
+
+  // Off-hours hard veto for 15m timeframe (Saturday/Sunday UTC or 21:00-00:00 UTC)
+  if (!options?.ignoreOffHours && setup.timeframe === "15m") {
+    const setupDate = new Date(setup.setupAt);
+    const utcDay = setupDate.getUTCDay(); // 0 = Sun, 6 = Sat
+    const utcHour = setupDate.getUTCHours();
+    if (utcDay === 0 || utcDay === 6 || utcHour >= 21) {
+      reasons.push("off-hours");
+    }
+  }
+
+  if (!options?.ignoreVolume && setup.style === "trend" && setup.context.rvol < 0.5) {
+    reasons.push("thin-volume");
+  }
+
   if (confidence < CONFIDENCE_FLOOR) reasons.push(`confidence ${confidence} below floor ${CONFIDENCE_FLOOR}`);
 
   const risk = Math.abs(setup.entry - setup.stopLoss);
@@ -72,3 +123,4 @@ export function gateSetup(setup: Setup, openSignalsExist: boolean): GateResult {
 
   return { pass: reasons.length === 0, confidence, reasons };
 }
+

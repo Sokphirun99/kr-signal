@@ -88,9 +88,58 @@ export function swingLevels(
 
 /** ATR percentile of the latest value vs its recent history (0–1) */
 export function atrPercentile(atr: (number | null)[], lookback = 100): number {
-  const vals = atr.slice(-lookback).filter((v): v is number => v !== null && v > 0);
+  return atrPercentileAtIndex(atr, atr.length - 1, lookback);
+}
+
+/** ATR percentile at a given index vs its trailing history (0–1) */
+export function atrPercentileAtIndex(
+  atr: (number | null)[],
+  idx: number,
+  lookback = 100,
+): number {
+  if (idx < 0 || idx >= atr.length) return 0.5;
+  const start = Math.max(0, idx - lookback + 1);
+  const vals = atr.slice(start, idx + 1).filter((v): v is number => v !== null && v > 0);
   if (vals.length < 20) return 0.5;
-  const latest = vals[vals.length - 1];
-  const below = vals.filter((v) => v <= latest).length;
+  const current = atr[idx];
+  if (current === null || current <= 0) return 0.5;
+  const below = vals.filter((v) => v <= current).length;
   return below / vals.length;
 }
+
+/**
+ * Calculates the count of consecutive recent closed candles where atrPercentile < 0.15.
+ */
+export function squeezeLength(
+  atr: (number | null)[],
+  endIdx: number = atr.length - 1,
+  lookback = 20,
+): number {
+  if (endIdx < 0) return 0;
+
+  const maxSearch = lookback * 3;
+  let countAtEnd = 0;
+  for (let k = endIdx; k >= 0 && k >= endIdx - maxSearch; k--) {
+    const pct = atrPercentileAtIndex(atr, k, 100);
+    if (pct < 0.15) {
+      countAtEnd++;
+    } else {
+      break;
+    }
+  }
+  if (countAtEnd > 0) return countAtEnd;
+
+  let countPrior = 0;
+  for (let k = endIdx - 1; k >= 0 && k >= endIdx - maxSearch; k--) {
+    const pct = atrPercentileAtIndex(atr, k, 100);
+    if (pct < 0.15) {
+      countPrior++;
+    } else {
+      break;
+    }
+  }
+
+  return countPrior;
+}
+
+
