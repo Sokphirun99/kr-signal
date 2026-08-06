@@ -3,7 +3,8 @@ import { createRouter, publicQuery } from "./middleware";
 import { ensureFresh } from "./engine/pipeline";
 import { listSignals, computeTrackRecord, computeFunnel } from "./queries/signals";
 import { fetchAllTickers } from "./engine/binance";
-import { INSTRUMENTS } from "@contracts/instruments";
+import { INSTRUMENTS } from "@contracts/types";
+
 
 export const signalsRouter = createRouter({
   /** Signal feed — triggers a throttled pipeline pass first */
