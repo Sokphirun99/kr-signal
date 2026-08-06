@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { vwapSeries, bollingerBandsSeries, ttmSqueezeSeries } from "./indicators";
+import {
+  vwapSeries,
+  bollingerBandsSeries,
+  ttmSqueezeSeries,
+  adxSeries,
+  rsiDivergence,
+  rsiSeries,
+} from "./indicators";
 import type { Candle } from "./binance";
 
 function generateCandles(count: number, basePrice = 100): Candle[] {
@@ -46,4 +53,23 @@ describe("Technical Indicators", () => {
     expect(squeeze.length).toBe(40);
     expect(typeof squeeze[30]).toBe("boolean");
   });
+
+  it("calculates ADX series", () => {
+    const candles = generateCandles(50, 100);
+    const { adx, plusDi, minusDi } = adxSeries(candles, 14);
+    expect(adx.length).toBe(50);
+    expect(adx[40]).not.toBeNull();
+    expect(plusDi[30]).not.toBeNull();
+    expect(minusDi[30]).not.toBeNull();
+  });
+
+  it("detects RSI divergence", () => {
+    const candles = generateCandles(30, 100);
+    const closes = candles.map((c) => c.close);
+    const rsi = rsiSeries(closes, 14);
+    const result = rsiDivergence(candles, rsi, 25, 20);
+    expect(typeof result.bullishDivergence).toBe("boolean");
+    expect(typeof result.bearishDivergence).toBe("boolean");
+  });
 });
+

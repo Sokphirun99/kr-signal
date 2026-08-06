@@ -80,3 +80,74 @@ export async function fetchOpenInterest(symbol: string): Promise<number | null> 
   }
 }
 
+interface TakerRatioCacheEntry {
+  ratio: number | null;
+  fetchedAt: number;
+}
+
+const takerCache = new Map<string, TakerRatioCacheEntry>();
+
+export async function fetchTakerRatio(symbol: string): Promise<number | null> {
+  const cached = takerCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.ratio;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `${FAPI_BASE}/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`,
+      { signal: controller.signal },
+    );
+    if (!res.ok) throw new Error(`Binance Taker Ratio HTTP ${res.status}`);
+    const data = (await res.json()) as Array<{ buySellRatio: string }>;
+    if (!Array.isArray(data) || data.length === 0) throw new Error("Empty taker ratio response");
+    const ratio = Number(data[0].buySellRatio);
+    if (Number.isNaN(ratio)) throw new Error("Invalid taker ratio");
+
+    takerCache.set(symbol, { ratio, fetchedAt: Date.now() });
+    return ratio;
+  } catch {
+    takerCache.set(symbol, { ratio: null, fetchedAt: Date.now() });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+interface SentimentCacheEntry {
+  value: number | null;
+  fetchedAt: number;
+}
+
+let sentimentCache: SentimentCacheEntry | null = null;
+
+export async function fetchFearAndGreed(): Promise<number | null> {
+  if (sentimentCache && Date.now() - sentimentCache.fetchedAt < CACHE_TTL_MS) {
+    return sentimentCache.value;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.alternative.me/fapi/?limit=1", {
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Fear & Greed HTTP ${res.status}`);
+    const body = (await res.json()) as { data?: Array<{ value: string }> };
+    if (!body.data || body.data.length === 0) throw new Error("Empty sentiment response");
+    const value = Number(body.data[0].value);
+    if (Number.isNaN(value)) throw new Error("Invalid sentiment value");
+
+    sentimentCache = { value, fetchedAt: Date.now() };
+    return value;
+  } catch {
+    sentimentCache = { value: null, fetchedAt: Date.now() };
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+

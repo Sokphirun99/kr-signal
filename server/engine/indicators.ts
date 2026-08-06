@@ -237,4 +237,119 @@ export function ttmSqueezeSeries(
   return squeeze;
 }
 
+export interface AdxResult {
+  adx: (number | null)[];
+  plusDi: (number | null)[];
+  minusDi: (number | null)[];
+}
+
+/** Wilder's ADX / DMI calculation */
+export function adxSeries(candles: Candle[], period = 14): AdxResult {
+  const adx: (number | null)[] = new Array(candles.length).fill(null);
+  const plusDi: (number | null)[] = new Array(candles.length).fill(null);
+  const minusDi: (number | null)[] = new Array(candles.length).fill(null);
+
+  if (candles.length < period * 2 + 1) return { adx, plusDi, minusDi };
+
+  let trSmooth = 0;
+  let plusDmSmooth = 0;
+  let minusDmSmooth = 0;
+
+  for (let i = 1; i <= period; i++) {
+    const { high, low } = candles[i];
+    const prev = candles[i - 1];
+    trSmooth += Math.max(high - low, Math.abs(high - prev.close), Math.abs(low - prev.close));
+    const upMove = high - prev.high;
+    const downMove = prev.low - low;
+    plusDmSmooth += upMove > downMove && upMove > 0 ? upMove : 0;
+    minusDmSmooth += downMove > upMove && downMove > 0 ? downMove : 0;
+  }
+
+  const dxs: (number | null)[] = new Array(candles.length).fill(null);
+
+  for (let i = period + 1; i < candles.length; i++) {
+    const { high, low } = candles[i];
+    const prev = candles[i - 1];
+    const tr = Math.max(high - low, Math.abs(high - prev.close), Math.abs(low - prev.close));
+    const upMove = high - prev.high;
+    const downMove = prev.low - low;
+    const plusDm = upMove > downMove && upMove > 0 ? upMove : 0;
+    const minusDm = downMove > upMove && downMove > 0 ? downMove : 0;
+
+    trSmooth = trSmooth - trSmooth / period + tr;
+    plusDmSmooth = plusDmSmooth - plusDmSmooth / period + plusDm;
+    minusDmSmooth = minusDmSmooth - minusDmSmooth / period + minusDm;
+
+    const pDi = trSmooth === 0 ? 0 : (plusDmSmooth / trSmooth) * 100;
+    const mDi = trSmooth === 0 ? 0 : (minusDmSmooth / trSmooth) * 100;
+    plusDi[i] = pDi;
+    minusDi[i] = mDi;
+
+    const sumDi = pDi + mDi;
+    dxs[i] = sumDi === 0 ? 0 : (Math.abs(pDi - mDi) / sumDi) * 100;
+  }
+
+  const validDxs = dxs.slice(period + 1, period * 2 + 1).filter((v): v is number => v !== null);
+  if (validDxs.length < period) return { adx, plusDi, minusDi };
+
+  let adxVal = validDxs.reduce((sum, v) => sum + v, 0) / period;
+  adx[period * 2] = adxVal;
+
+  for (let i = period * 2 + 1; i < candles.length; i++) {
+    const dx = dxs[i];
+    if (dx !== null) {
+      adxVal = (adxVal * (period - 1) + dx) / period;
+      adx[i] = adxVal;
+    }
+  }
+
+  return { adx, plusDi, minusDi };
+}
+
+export interface RsiDivergenceResult {
+  bullishDivergence: boolean;
+  bearishDivergence: boolean;
+}
+
+/** Detects price vs RSI divergence over a trailing window */
+export function rsiDivergence(
+  candles: Candle[],
+  rsi: (number | null)[],
+  endIdx: number = candles.length - 1,
+  lookback = 20,
+): RsiDivergenceResult {
+  if (endIdx < lookback || endIdx >= candles.length) {
+    return { bullishDivergence: false, bearishDivergence: false };
+  }
+
+  const currentCandle = candles[endIdx];
+  const currentRsi = rsi[endIdx];
+  if (currentRsi === null) return { bullishDivergence: false, bearishDivergence: false };
+
+  const startIdx = Math.max(0, endIdx - lookback);
+  let minPrice = Infinity;
+  let minPriceRsi = Infinity;
+  let maxPrice = -Infinity;
+  let maxPriceRsi = -Infinity;
+
+  for (let k = startIdx; k < endIdx - 2; k++) {
+    const r = rsi[k];
+    if (r === null) continue;
+    if (candles[k].low < minPrice) {
+      minPrice = candles[k].low;
+      minPriceRsi = r;
+    }
+    if (candles[k].high > maxPrice) {
+      maxPrice = candles[k].high;
+      maxPriceRsi = r;
+    }
+  }
+
+  const bullishDivergence = currentCandle.low <= minPrice && currentRsi > minPriceRsi + 2;
+  const bearishDivergence = currentCandle.high >= maxPrice && currentRsi < maxPriceRsi - 2;
+
+  return { bullishDivergence, bearishDivergence };
+}
+
+
 

@@ -17,6 +17,8 @@ import {
   vwapSeries,
   bollingerBandsSeries,
   ttmSqueezeSeries,
+  adxSeries,
+  rsiDivergence,
 } from "./indicators";
 import type { StrategyStyle, TradeSide, Timeframe } from "@contracts/instruments";
 
@@ -53,6 +55,13 @@ export interface Setup {
     percentB?: number | null;
     ttmSqueeze?: boolean;
     openInterest?: number | null;
+    adx?: number | null;
+    plusDi?: number | null;
+    minusDi?: number | null;
+    bullishDivergence?: boolean;
+    bearishDivergence?: boolean;
+    takerRatio?: number | null;
+    fearAndGreed?: number | null;
   };
 }
 
@@ -68,6 +77,8 @@ export function generateSetup(
   timeframe: Timeframe,
   fundingRate?: number | null,
   openInterest?: number | null,
+  takerRatio?: number | null,
+  fearAndGreed?: number | null,
 ): Setup | null {
   if (candles.length < 120) return null;
 
@@ -135,10 +146,15 @@ export function generateSetup(
   const vwaps = vwapSeries(candles);
   const bb = bollingerBandsSeries(closes, 20, 2.0);
   const ttmSqueezes = ttmSqueezeSeries(candles, 20, 14);
+  const { adx, plusDi, minusDi } = adxSeries(candles, 14);
+  const { bullishDivergence, bearishDivergence } = rsiDivergence(candles, rsi, i, 20);
 
   const currentVwap = vwaps[i];
   const currentPercentB = bb.percentB[i];
   const currentTtmSqueeze = ttmSqueezes[i];
+  const currentAdx = adx[i];
+  const currentPlusDi = plusDi[i];
+  const currentMinusDi = minusDi[i];
 
   const base = {
     timeframe,
@@ -158,6 +174,13 @@ export function generateSetup(
       percentB: currentPercentB,
       ttmSqueeze: currentTtmSqueeze,
       openInterest: openInterest ?? null,
+      adx: currentAdx,
+      plusDi: currentPlusDi,
+      minusDi: currentMinusDi,
+      bullishDivergence,
+      bearishDivergence,
+      takerRatio: takerRatio ?? null,
+      fearAndGreed: fearAndGreed ?? null,
     },
   };
 

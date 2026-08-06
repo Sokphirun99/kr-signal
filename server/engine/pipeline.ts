@@ -20,7 +20,12 @@ import { fetchClosedKlines } from "./binance";
 import { generateSetup, HTF_MAP, isHtfVetoed } from "./strategy";
 import { gateSetup } from "./gate";
 import { verifySignal } from "./verifier";
-import { fetchFundingRate, fetchOpenInterest } from "./futures";
+import {
+  fetchFundingRate,
+  fetchOpenInterest,
+  fetchTakerRatio,
+  fetchFearAndGreed,
+} from "./futures";
 
 const SCAN_INTERVAL_MS = 5 * 60_000; // one pipeline pass per 5 minutes max
 let lastPass = 0;
@@ -103,18 +108,26 @@ export async function runPipelinePass(): Promise<PassReport> {
     INSTRUMENTS.map(async (instrument) => {
       let fundingRate: number | null = null;
       let openInterest: number | null = null;
+      let takerRatio: number | null = null;
+      let fearAndGreed: number | null = null;
 
       if (instrument.market === "crypto") {
         try {
-          const [fr, oi] = await Promise.all([
+          const [fr, oi, tr, fg] = await Promise.all([
             fetchFundingRate(instrument.symbol),
             fetchOpenInterest(instrument.symbol),
+            fetchTakerRatio(instrument.symbol),
+            fetchFearAndGreed(),
           ]);
           fundingRate = fr;
           openInterest = oi;
+          takerRatio = tr;
+          fearAndGreed = fg;
         } catch {
           fundingRate = null;
           openInterest = null;
+          takerRatio = null;
+          fearAndGreed = null;
         }
       }
 
@@ -124,7 +137,14 @@ export async function runPipelinePass(): Promise<PassReport> {
         let note: string | null = null;
         try {
           const candles = await klinesFor(instrument.pair, timeframe);
-          const setup = generateSetup(candles, timeframe, fundingRate, openInterest);
+          const setup = generateSetup(
+            candles,
+            timeframe,
+            fundingRate,
+            openInterest,
+            takerRatio,
+            fearAndGreed,
+          );
 
           if (!setup) {
             note = "no setup";

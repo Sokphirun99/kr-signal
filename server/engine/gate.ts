@@ -82,6 +82,36 @@ export function scoreSetup(
     }
   }
 
+  // ADX trend strength adjustments
+  const adx = setup.context.adx;
+  if (setup.style === "trend" && adx != null) {
+    if (adx >= 22) score += 8;
+    else if (adx < 20) score -= 10;
+  }
+
+  // RSI Divergence bonus
+  if (setup.side === "buy" && setup.context.bullishDivergence) score += 8;
+  else if (setup.side === "sell" && setup.context.bearishDivergence) score += 8;
+
+  // Taker buy/sell volume aggression
+  const takerRatio = setup.context.takerRatio;
+  if (takerRatio != null) {
+    if (setup.side === "buy") {
+      if (takerRatio > 1.15) score += 6;
+      else if (takerRatio < 0.85) score -= 6;
+    } else if (setup.side === "sell") {
+      if (takerRatio < 0.85) score += 6;
+      else if (takerRatio > 1.15) score -= 6;
+    }
+  }
+
+  // Macro sentiment (Fear & Greed Index)
+  const fg = setup.context.fearAndGreed;
+  if (fg != null) {
+    if (setup.style === "range" && setup.side === "buy" && fg < 25) score += 5;
+    if (setup.style === "trend" && setup.side === "buy" && fg > 75) score -= 5;
+  }
+
   return Math.max(40, Math.min(90, score));
 }
 
