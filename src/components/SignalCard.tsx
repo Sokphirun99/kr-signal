@@ -2,6 +2,7 @@ import { formatPrice, getInstrument } from "@contracts/instruments";
 import type { Signal } from "@db/schema";
 import { cn } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, Clock, ExternalLink, Info } from "lucide-react";
+import { trpc } from "@/providers/trpc";
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -123,6 +124,75 @@ function Level({ label, value, decimals }: { label: string; value: number; decim
         {formatPrice(value, decimals)}
       </p>
     </div>
+  );
+}
+
+function AnalysisMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-md border border-white/5 bg-black/20 px-2.5 py-2">
+      <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
+      <p className="mt-0.5 font-mono text-xs font-semibold tabular-nums text-zinc-100">{value}</p>
+      <p className="mt-0.5 text-[10px] text-zinc-500">{detail}</p>
+    </div>
+  );
+}
+
+function optionalNumber(value: number | null, digits = 2): string {
+  return value === null ? "—" : value.toFixed(digits);
+}
+
+function SignalTechnicalAnalysis({
+  symbol,
+  timeframe,
+  decimals,
+}: {
+  symbol: string;
+  timeframe: Signal["timeframe"];
+  decimals: number;
+}) {
+  const query = trpc.signals.analysis.useQuery(
+    { symbol, timeframe },
+    { refetchInterval: 60_000, staleTime: 25_000 },
+  );
+  const analysis = query.data?.analysis;
+
+  return (
+    <section className="mt-4 border-t border-white/10 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">Live technical analysis</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">Latest completed {timeframe} candle · automatic for this signal</p>
+        </div>
+        {analysis && (
+          <div className="flex items-center gap-2 text-[11px] font-medium">
+            <span className={cn("capitalize", analysis.directionalBias === "bullish" ? "text-emerald-400" : analysis.directionalBias === "bearish" ? "text-red-400" : "text-zinc-400")}>
+              {analysis.directionalBias} bias
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 capitalize text-zinc-300">{analysis.regime}</span>
+          </div>
+        )}
+      </div>
+
+      {query.isLoading ? (
+        <p className="mt-3 text-xs text-zinc-500">Loading indicator values…</p>
+      ) : query.isError ? (
+        <p className="mt-3 text-xs text-red-300">Technical data is temporarily unavailable.</p>
+      ) : analysis ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <AnalysisMetric label="Current price" value={formatPrice(analysis.currentPrice, decimals)} detail="Last close" />
+          <AnalysisMetric label="EMA 20" value={formatPrice(analysis.ema20, decimals)} detail="Fast average" />
+          <AnalysisMetric label="EMA 50" value={formatPrice(analysis.ema50, decimals)} detail="Slow average" />
+          <AnalysisMetric label="RSI 14" value={analysis.rsi14.toFixed(1)} detail="Momentum" />
+          <AnalysisMetric label="ATR 14" value={formatPrice(analysis.atr14, decimals)} detail={`${(analysis.atrPercentile * 100).toFixed(0)}th percentile`} />
+          <AnalysisMetric label="ADX / DMI" value={optionalNumber(analysis.adx14, 1)} detail={`+DI ${optionalNumber(analysis.plusDi14, 1)} · −DI ${optionalNumber(analysis.minusDi14, 1)}`} />
+          <AnalysisMetric label="Relative volume" value={`${analysis.relativeVolume.toFixed(2)}×`} detail="vs 20-candle mean" />
+          <AnalysisMetric label="VWAP" value={analysis.vwap === null ? "—" : formatPrice(analysis.vwap, decimals)} detail="Volume-weighted price" />
+          <AnalysisMetric label="Bollinger %B" value={optionalNumber(analysis.bollingerPercentB, 2)} detail="0 lower · 1 upper" />
+          <AnalysisMetric label="Squeeze" value={analysis.ttmSqueeze ? "Active" : "Inactive"} detail={`${analysis.squeezeLength} low-vol candles`} />
+          <AnalysisMetric label="RSI divergence" value={analysis.bullishDivergence ? "Bullish" : analysis.bearishDivergence ? "Bearish" : "None"} detail="20-candle heuristic" />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -302,6 +372,12 @@ export default function SignalCard({ signal: rawSignal }: { signal: Signal | Rec
           </p>
         </div>
       </div>
+
+      <SignalTechnicalAnalysis
+        symbol={signal.symbol}
+        timeframe={signal.timeframe}
+        decimals={decimals}
+      />
 
       {/* Footer Meta Row */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-xs text-zinc-400">

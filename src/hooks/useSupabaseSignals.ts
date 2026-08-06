@@ -6,6 +6,7 @@ export interface SupabaseSignalFilters {
   symbol?: string;
   status?: string;
   closedOnly?: boolean;
+  historyOnly?: boolean;
 }
 
 export function computeTrackFromSignals(signals: (Signal | Record<string, unknown>)[]) {
@@ -62,6 +63,7 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
   const symbol = filters?.symbol;
   const status = filters?.status;
   const closedOnly = filters?.closedOnly;
+  const historyOnly = filters?.historyOnly;
 
   useEffect(() => {
     async function fetchFromSupabase() {
@@ -71,7 +73,9 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
         if (symbol) {
           q = q.eq("symbol", symbol);
         }
-        if (closedOnly) {
+        if (historyOnly) {
+          q = q.neq("status", "open");
+        } else if (closedOnly) {
           q = q.not("status", "in", "(open,expired)");
         } else if (status && status !== "all") {
           q = q.eq("status", status);
@@ -87,7 +91,7 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       }
     }
     fetchFromSupabase();
-  }, [symbol, status, closedOnly]);
+  }, [symbol, status, closedOnly, historyOnly]);
 
   return { supabaseSignals, isLoading };
 }

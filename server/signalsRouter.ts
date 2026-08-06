@@ -3,8 +3,11 @@ import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { ensureFresh } from "./engine/pipeline";
 import { listSignals, computeTrackRecord, computeFunnel } from "./queries/signals";
-import { fetchAllTickers } from "./engine/binance";
-import { INSTRUMENTS } from "@contracts/types";
+import { fetchAllTickers, fetchClosedKlines } from "./engine/binance";
+import { generateSetup } from "./engine/strategy";
+import { gateSetup } from "./engine/gate";
+import { analyzeTechnicalData } from "./engine/analysis";
+import { INSTRUMENTS, TIMEFRAMES } from "@contracts/types";
 
 
 export const signalsRouter = createRouter({
@@ -18,6 +21,7 @@ export const signalsRouter = createRouter({
             .enum(["open", "tp1", "tp2", "tp3", "sl", "be", "expired", "undecidable"])
             .nullish(),
           closedOnly: z.boolean().nullish(),
+          historyOnly: z.boolean().nullish(),
           limit: z.number().min(1).max(500).nullish(),
         })
         .nullish(),
@@ -29,6 +33,7 @@ export const signalsRouter = createRouter({
           symbol: input?.symbol ?? undefined,
           status: input?.status ?? undefined,
           closedOnly: input?.closedOnly ?? undefined,
+          historyOnly: input?.historyOnly ?? undefined,
           limit: input?.limit ?? undefined,
         });
       } catch (err) {
@@ -70,6 +75,72 @@ export const signalsRouter = createRouter({
       });
     }
   }),
+
+  /**
+   * A read-only indicator snapshot. This does not run the pipeline or publish
+   * a signal; it lets the UI explain the same market inputs the engine uses.
+   */
+  analysis: publicQuery
+    .input(
+      z.object({
+        symbol: z.string().refine(
+          (symbol) => INSTRUMENTS.some((instrument) => instrument.symbol === symbol),
+          "Unsupported instrument",
+        ),
+        timeframe: z.enum(TIMEFRAMES),
+      }),
+    )
+    .query(async ({ input }) => {
+      const instrument = INSTRUMENTS.find((item) => item.symbol === input.symbol);
+      if (!instrument) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported instrument." });
+      }
+
+      try {
+        const candles = await fetchClosedKlines(instrument.pair, input.timeframe, 300);
+        const analysis = analyzeTechnicalData(candles);
+        if (!analysis) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Not enough closed candles to calculate technical analysis.",
+          });
+        }
+
+        const setup = generateSetup(candles, input.timeframe);
+        const gate = setup ? gateSetup(setup, false) : null;
+        return {
+          instrument: {
+            symbol: instrument.symbol,
+            name: instrument.name,
+            market: instrument.market,
+            decimals: instrument.decimals,
+            basisNote: instrument.basisNote ?? null,
+          },
+          timeframe: input.timeframe,
+          analysis,
+          candidate: setup
+            ? {
+                side: setup.side,
+                style: setup.style,
+                entry: setup.entry,
+                stopLoss: setup.stopLoss,
+                tp1: setup.tp1,
+                tp2: setup.tp2,
+                tp3: setup.tp3,
+              }
+            : null,
+          gate,
+        };
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        console.error("technical analysis query error:", err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to load market analysis right now.",
+          cause: err,
+        });
+      }
+    }),
 
   /** Live ticker tape across all instruments */
   ticker: publicQuery.query(async () => {

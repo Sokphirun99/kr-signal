@@ -4,7 +4,7 @@
 
 import { getDb } from "./connection";
 import { signals, scanRuns } from "@db/schema";
-import { and, desc, eq, inArray, gte, sql } from "drizzle-orm";
+import { and, desc, eq, ne, inArray, gte, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
   WIN_STATUSES,
@@ -15,6 +15,7 @@ export async function listSignals(filters?: {
   symbol?: string | null;
   status?: SignalStatus | null;
   closedOnly?: boolean | null;
+  historyOnly?: boolean | null;
   limit?: number | null;
 }) {
   try {
@@ -22,6 +23,7 @@ export async function listSignals(filters?: {
     if (filters?.symbol) conditions.push(eq(signals.symbol, filters.symbol));
     if (filters?.status) conditions.push(eq(signals.status, filters.status));
     if (filters?.closedOnly) conditions.push(inArray(signals.status, CLOSED_STATUSES));
+    if (filters?.historyOnly) conditions.push(ne(signals.status, "open"));
 
     return await getDb()
       .select()
@@ -233,4 +235,3 @@ export async function computeFunnel(days = 7): Promise<Funnel> {
     };
   }
 }
-

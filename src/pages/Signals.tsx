@@ -4,7 +4,7 @@ import SignalCard from "@/components/SignalCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
-import { INSTRUMENTS, type SignalStatus, type Market } from "@contracts/instruments";
+import { INSTRUMENTS, type Market } from "@contracts/instruments";
 import { cn } from "@/lib/utils";
 
 function SignalCardSkeleton() {
@@ -35,14 +35,9 @@ function SignalCardSkeleton() {
   );
 }
 
-const TABS: Array<{ id: "all" | SignalStatus | "closed"; label: string }> = [
-  { id: "all", label: "All Setups" },
-  { id: "open", label: "Open" },
-  { id: "tp1", label: "TP1 Hit" },
-  { id: "tp2", label: "TP2 Hit" },
-  { id: "tp3", label: "TP3 Hit" },
-  { id: "sl", label: "SL Hit" },
-  { id: "closed", label: "All Closed" },
+const TABS: Array<{ id: "open" | "history"; label: string }> = [
+  { id: "open", label: "Live Signals" },
+  { id: "history", label: "History" },
 ];
 
 const MARKETS: Array<{ id: Market | "all"; label: string }> = [
@@ -59,13 +54,13 @@ export default function Signals() {
 
   const [marketCategory, setMarketCategory] = useState<Market | "all">("all");
   const [symbol, setSymbol] = useState<string | undefined>();
-  const [tab, setTab] = useState<"all" | SignalStatus | "closed">("all");
+  const [tab, setTab] = useState<"open" | "history">("open");
 
   const query = trpc.signals.list.useQuery(
     {
       symbol,
-      status: tab === "all" || tab === "closed" ? undefined : tab,
-      closedOnly: tab === "closed" ? true : undefined,
+      status: tab === "open" ? "open" : undefined,
+      historyOnly: tab === "history" ? true : undefined,
       limit: 100,
     },
     {
@@ -75,8 +70,8 @@ export default function Signals() {
 
   const { supabaseSignals } = useSupabaseSignals({
     symbol,
-    status: tab,
-    closedOnly: tab === "closed",
+    status: tab === "open" ? "open" : undefined,
+    historyOnly: tab === "history",
   });
 
   const rawSignals = query.data && query.data.length > 0 ? query.data : supabaseSignals;
@@ -157,7 +152,7 @@ export default function Signals() {
             </div>
           </div>
 
-          {/* Bottom row: Status Filter Tabs */}
+          {/* Bottom row: Live vs historical signal views */}
           <div className="flex overflow-x-auto gap-1 border-t border-white/5 pt-3 scrollbar-none">
             {TABS.map((t) => (
               <button
@@ -187,7 +182,7 @@ export default function Signals() {
             ))
           ) : (
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-12 text-center">
-              <p className="text-sm font-medium text-zinc-400">No signals found matching filters</p>
+              <p className="text-sm font-medium text-zinc-400">No {tab === "open" ? "live" : "historical"} signals found matching filters</p>
               <p className="mt-1 text-xs text-zinc-500">
                 Try selecting a different market category or symbol.
               </p>
