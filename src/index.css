@@ -74,6 +74,12 @@
   }
 }
 
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 @keyframes ticker {
   from {
     transform: translateX(0);

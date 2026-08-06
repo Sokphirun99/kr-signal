@@ -1,7 +1,7 @@
 import { formatPrice, getInstrument } from "@contracts/instruments";
 import type { Signal } from "@db/schema";
 import { cn } from "@/lib/utils";
-import { ArrowDownRight, ArrowUpRight, Clock } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Clock, Info } from "lucide-react";
 
 const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
   open: { label: "Live", cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20" },
@@ -14,38 +14,41 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
   undecidable: { label: "Undecidable", cls: "bg-purple-500/15 text-purple-400 border border-purple-500/20" },
 };
 
-function formatLocalTime(dateInput: Date | string): string {
+function formatUtcTime(dateInput: Date | string): string {
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return (
+    d.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "UTC",
+    }) + " UTC"
+  );
 }
-
 
 function Level({ label, value, decimals }: { label: string; value: number; decimals: number }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</p>
-      <p className="font-mono text-sm text-zinc-100">{formatPrice(value, decimals)}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">{label}</p>
+      <p className="font-mono text-sm font-semibold tabular-nums text-zinc-100 mt-0.5">
+        {formatPrice(value, decimals)}
+      </p>
     </div>
   );
 }
 
-
 function getTimeLeft(expiresAt: Date | string): { text: string; urgencyCls: string } {
   const ms = new Date(expiresAt).getTime() - Date.now();
-  if (ms <= 0) return { text: "expired", urgencyCls: "text-zinc-500" };
-  
+  if (ms <= 0) return { text: "expired", urgencyCls: "text-zinc-400" };
+
   const h = Math.floor(ms / 3_600_000);
   const d = Math.floor(h / 24);
   const m = Math.floor((ms % 3_600_000) / 60_000);
-  
+
   const text = d > 0 ? `${d}d ${h % 24}h left` : `${h}h ${m}m left`;
 
   if (ms < 30 * 60_000) {
@@ -76,10 +79,13 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
 
   const inst = getInstrument(signal.symbol);
   const decimals = inst?.decimals ?? 2;
-  const st = STATUS_STYLE[signal.status] ?? { label: signal.status, cls: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20" };
+  const st = STATUS_STYLE[signal.status] ?? {
+    label: signal.status,
+    cls: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20",
+  };
   const isBuy = signal.side === "buy";
   const stopDiff = Math.abs(signal.entry - signal.stopLoss);
-  
+
   // Hide TP3 when it equals TP2 (range capping)
   const isCapped = signal.tp3 > 0 && Math.abs(signal.tp3 - signal.tp2) < 1e-6;
   const maxTp = isCapped ? signal.tp2 : signal.tp3;
@@ -99,28 +105,31 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-white/5 bg-white/[0.03] p-5 transition-all hover:border-white/10 border-l-2 shadow-sm",
+        "rounded-xl border border-white/10 bg-white/[0.03] p-5 transition-all hover:border-white/20 border-l-4 shadow-xs",
         isBuy ? "border-l-emerald-500" : "border-l-red-500",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Header Row */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-lg",
-              isBuy ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400",
+              "flex h-9 w-9 items-center justify-center rounded-lg border",
+              isBuy
+                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+                : "bg-red-500/15 text-red-400 border-red-500/20",
             )}
           >
-            {isBuy ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+            {isBuy ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
           </span>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-white">{signal.symbol}</span>
-              <span className="text-xs text-zinc-500">
+              <span className="font-semibold text-base text-white">{signal.symbol}</span>
+              <span className="text-xs text-zinc-400">
                 {inst?.name} · {signal.timeframe}
               </span>
             </div>
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
               <span className={cn("font-bold tracking-wide", isBuy ? "text-emerald-400" : "text-red-400")}>
                 {signal.side?.toUpperCase()}
               </span>
@@ -132,12 +141,12 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           <div className="flex items-center gap-2">
             {signal.status !== "open" && rMult !== null ? (
               <span
                 className={cn(
-                  "rounded-lg px-2.5 py-0.5 font-mono text-xs font-bold shadow-sm border",
+                  "rounded-lg px-2.5 py-0.5 font-mono text-xs font-bold shadow-xs border tabular-nums",
                   rMult > 0
                     ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                     : rMult < 0
@@ -154,19 +163,22 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
             </span>
           </div>
           <span
+            title="Rule-engine confidence score (floor 60%)"
             className={cn(
-              "rounded-full border px-2 py-0.5 font-mono text-[11px] font-medium shadow-2xs",
+              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-medium shadow-2xs tabular-nums cursor-help",
               confCls,
             )}
           >
             conf {signal.confidence}%
+            <Info className="h-3 w-3 opacity-70" />
           </span>
         </div>
       </div>
 
+      {/* Levels Grid */}
       <div
         className={cn(
-          "mt-4 grid gap-4",
+          "mt-4 grid gap-4 rounded-lg bg-black/20 p-3 border border-white/5",
           isCapped ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3 sm:grid-cols-6",
         )}
       >
@@ -180,23 +192,26 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
         />
         {!isCapped && <Level label="TP3" value={signal.tp3} decimals={decimals} />}
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
             {isCapped ? "Max R:R" : "R:R"}
           </p>
-          <p className="font-mono text-sm text-zinc-100">1 : {rr.toFixed(1)}</p>
+          <p className="font-mono text-sm font-semibold tabular-nums text-zinc-100 mt-0.5">
+            1 : {rr.toFixed(1)}
+          </p>
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3 text-xs text-zinc-500">
-        <div className="flex items-center gap-3">
+      {/* Footer Meta Row */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-xs text-zinc-400">
+        <div className="flex flex-wrap items-center gap-3">
           <span>
-            Opened {formatLocalTime(signal.openedAt)}
-            {signal.closedAt && ` · Closed ${formatLocalTime(signal.closedAt)}`}
+            Opened {formatUtcTime(signal.openedAt)}
+            {signal.closedAt && ` · Closed ${formatUtcTime(signal.closedAt)}`}
           </span>
 
-          {signal.status === "open" && (
-            signal.entryFilled ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400 border border-emerald-500/20">
+          {signal.status === "open" &&
+            (signal.entryFilled ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400 border border-emerald-500/20">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
                 In position · filled
               </span>
@@ -204,22 +219,32 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-400/90">
                 ⏳ Waiting for entry
               </span>
-            )
-          )}
+            ))}
         </div>
 
         {signal.status === "open" ? (
-          <span className={cn("flex items-center gap-1 font-mono text-xs", urgencyCls)}>
+          <span className={cn("flex items-center gap-1 font-mono text-xs tabular-nums", urgencyCls)}>
             <Clock className="h-3 w-3" />
             {urgencyText}
           </span>
         ) : rMult !== null ? (
-          <span className="font-mono text-xs text-zinc-400">
-            Result: <span className={rMult > 0 ? "text-emerald-400 font-semibold" : rMult < 0 ? "text-red-400 font-semibold" : "text-zinc-300"}>{rMult > 0 ? "+" : ""}{rMult.toFixed(2)}R</span>
+          <span className="font-mono text-xs tabular-nums text-zinc-400">
+            Result:{" "}
+            <span
+              className={
+                rMult > 0
+                  ? "text-emerald-400 font-semibold"
+                  : rMult < 0
+                  ? "text-red-400 font-semibold"
+                  : "text-zinc-300"
+              }
+            >
+              {rMult > 0 ? "+" : ""}
+              {rMult.toFixed(2)}R
+            </span>
           </span>
         ) : null}
       </div>
     </div>
   );
 }
-

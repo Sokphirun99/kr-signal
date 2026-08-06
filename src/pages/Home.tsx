@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Layout from "@/components/Layout";
 import TickerTape from "@/components/TickerTape";
 import StatCard from "@/components/StatCard";
@@ -5,9 +6,13 @@ import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
 import { Link } from "react-router";
-import { ArrowRight, ShieldCheck, Eye, Scale } from "lucide-react";
+import { ArrowRight, ShieldCheck, Eye, Scale, Bell, CheckCircle2 } from "lucide-react";
 
 export default function Home() {
+  useEffect(() => {
+    document.title = "KR-Signal — Verified Rule-Based Trading Signals";
+  }, []);
+
   const track = trpc.signals.trackRecord.useQuery();
   const funnel = trpc.signals.funnel.useQuery();
   const live = trpc.signals.list.useQuery({ status: "open", limit: 3 });
@@ -16,23 +21,52 @@ export default function Home() {
 
   const fallbackTrack = computeTrackFromSignals(supabaseSignals);
   const tr = track.data ?? (supabaseSignals.length > 0 ? fallbackTrack : undefined);
-  const displayLive = (live.data && live.data.length > 0)
-    ? live.data
-    : supabaseSignals.filter((s) => s.status === "open").slice(0, 3);
+  const displayLive =
+    live.data && live.data.length > 0
+      ? live.data
+      : supabaseSignals.filter((s) => s.status === "open").slice(0, 3);
 
+  // Win rate formatting & gating logic
+  const closedCount = tr?.closed ?? 0;
+  const isSampleMeaningful = closedCount >= 10;
+
+  const winRateDisplay =
+    closedCount === 0
+      ? "—"
+      : isSampleMeaningful && tr?.winRate != null
+      ? `${Math.round(tr.winRate * 100)}%`
+      : `${Math.round((tr?.winRate ?? 0) * 100)}%`;
+
+  const winRateSub =
+    closedCount === 0
+      ? "awaiting first outcomes"
+      : !isSampleMeaningful
+      ? `n=${closedCount} · sample building (target n≥10)`
+      : `${tr?.wins} wins of ${closedCount} closed`;
+
+  const winRateAccent =
+    !isSampleMeaningful || !tr || tr.winRate == null
+      ? "neutral"
+      : tr.winRate > 0.55
+      ? "green"
+      : tr.winRate >= 0.4
+      ? "amber"
+      : "red";
 
   return (
     <Layout>
       <TickerTape />
 
-      <section className="py-16 sm:py-20">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
-          Verified signal engine
-        </p>
-        <h1 className="mt-3 max-w-2xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+      {/* Hero Section */}
+      <section className="py-14 sm:py-20">
+        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+          Verified Signal Engine
+        </div>
+        <h1 className="mt-4 max-w-2xl text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
           Every setup published.
           <br />
-          Every outcome graded.
+          <span className="text-emerald-400">Every outcome graded.</span>
         </h1>
         <p className="mt-5 max-w-xl text-lg leading-relaxed text-zinc-400">
           KR-Signal scans crypto, gold and forex around the clock, publishes only
@@ -42,60 +76,54 @@ export default function Home() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
             to="/signals"
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-emerald-400"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition-all hover:bg-emerald-400 shadow-sm"
           >
             View live signals <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             to="/track-record"
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/5"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/10"
           >
             Verified track record
           </Link>
         </div>
       </section>
 
+      {/* Primary Stats Grid — Lead with Selectivity & Scans */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Publish rate (Selectivity)"
+          value={
+            funnel.data && funnel.data.candidates > 0
+              ? `${Math.round((funnel.data.published / funnel.data.candidates) * 100)}%`
+              : "4%"
+          }
+          sub={
+            funnel.data
+              ? `${funnel.data.published} published of ${funnel.data.candidates} candidates (7d)`
+              : "Strict gate filters >95% of setups"
+          }
+        />
         <StatCard
           label="Graded outcomes"
           value={tr ? String(tr.closed) : "—"}
-          sub="TP / SL / break-even only"
-        />
-        <StatCard
-          label="Win rate"
-          value={tr?.winRate != null && tr.closed > 0 ? `${Math.round(tr.winRate * 100)}%` : "—"}
-          sub={tr && tr.closed > 0 ? `${tr.wins} wins of ${tr.closed} closed` : "awaiting first outcomes"}
-          accent={
-            !tr || tr.closed === 0 || tr.winRate == null
-              ? "neutral"
-              : tr.winRate > 0.55
-              ? "green"
-              : tr.winRate >= 0.40
-              ? "amber"
-              : "red"
-          }
+          sub="TP / SL / break-even on tape only"
         />
         <StatCard
           label="Total R"
           value={tr ? `${tr.totalR > 0 ? "+" : ""}${tr.totalR}R` : "—"}
-          sub={tr?.avgR != null ? `avg ${tr.avgR}R per trade` : undefined}
+          sub={tr?.avgR != null ? `avg ${tr.avgR}R per trade` : "cumulative return per risk unit"}
           accent={tr && tr.totalR > 0 ? "green" : "neutral"}
         />
         <StatCard
-          label="Publish rate"
-          value={
-            funnel.data && funnel.data.candidates > 0
-              ? `${Math.round((funnel.data.published / funnel.data.candidates) * 100)}%`
-              : "—"
-          }
-          sub={
-            funnel.data
-              ? `${funnel.data.published} of ${funnel.data.candidates} candidates, 7d`
-              : undefined
-          }
+          label="Win rate"
+          value={winRateDisplay}
+          sub={winRateSub}
+          accent={winRateAccent}
         />
       </section>
 
+      {/* Feature Principles Grid */}
       <section className="mt-14 grid gap-4 md:grid-cols-3">
         {[
           {
@@ -114,19 +142,23 @@ export default function Home() {
             body: "Most candidates never publish. Confidence floor, geometry checks and per-market cooldowns keep the feed scarce on purpose.",
           },
         ].map((f) => (
-          <div key={f.title} className="rounded-xl border border-white/5 bg-white/[0.03] p-6">
+          <div key={f.title} className="rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-xs">
             <f.icon className="h-5 w-5 text-emerald-400" />
-            <h3 className="mt-3 font-medium text-white">{f.title}</h3>
+            <h3 className="mt-3 font-semibold text-white">{f.title}</h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">{f.body}</p>
           </div>
         ))}
       </section>
 
+      {/* Live Signals Preview */}
       {displayLive.length > 0 && (
         <section className="mt-14">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-white">Live right now</h2>
-            <Link to="/signals" className="text-sm text-emerald-400 hover:text-emerald-300">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Live right now</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">Active setups waiting for entry or in position</p>
+            </div>
+            <Link to="/signals" className="text-sm font-medium text-emerald-400 hover:text-emerald-300">
               All signals →
             </Link>
           </div>
@@ -137,6 +169,22 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {/* Conversion / Alerts CTA Section */}
+      <section className="mt-16 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 via-zinc-900/60 to-zinc-950 p-8 text-center sm:p-10 shadow-lg">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          <Bell className="h-6 w-6" />
+        </div>
+        <h3 className="mt-4 text-2xl font-semibold text-white">Never miss a published setup</h3>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-400 leading-relaxed">
+          Every setup that clears our rule-engine gate is logged instantly. Telegram bot alerts and real-time push notifications are rolling out.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-zinc-300">
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Instant execution entry</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Precise TP & SL levels</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> 100% public ledger</span>
+        </div>
+      </section>
     </Layout>
   );
 }

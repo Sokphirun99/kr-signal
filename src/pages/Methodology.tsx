@@ -1,4 +1,14 @@
+import { useEffect } from "react";
 import Layout from "@/components/Layout";
+
+const QUICK_RULES = [
+  { label: "Confidence Floor", value: "60%" },
+  { label: "Minimum Target", value: "≥ 1.4R" },
+  { label: "Same-Candle Rule", value: "Stop First" },
+  { label: "Gap-Through", value: "Graded at Open" },
+  { label: "After TP1", value: "Break-Even" },
+  { label: "After TP2", value: "2.5× ATR Trail" },
+];
 
 const SECTIONS: { title: string; body: string[] }[] = [
   {
@@ -18,7 +28,6 @@ const SECTIONS: { title: string; body: string[] }[] = [
       "After the second target is touched, the fixed third target is replaced with a dynamic 2.5×ATR trailing stop (ratcheted strictly in the trade's favor), graded the same conservative way on any trail breach.",
     ],
   },
-
   {
     title: "What enters the win rate — and what never does",
     body: [
@@ -29,7 +38,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Data sources and basis",
     body: [
-      "All instruments resolve through Binance spot pairs. Crypto uses the direct pairs (BTCUSDT, ETHUSDT, SOLUSDT). Gold uses PAXG/USDT — a token redeemable for one troy ounce of gold, tracking spot with a small basis. EUR/USD and GBP/USD use the EUR/USDT and GBP/USDT pairs, which carry a small stablecoin basis versus interbank spot.",
+      "All instruments resolve through Binance spot pairs. Crypto uses direct pairs (BTCUSDT, ETHUSDT, SOLUSDT). Gold uses PAXG/USDT — a token redeemable for one troy ounce of gold, tracking spot with a small basis. EUR/USD and GBP/USD use EUR/USDT and GBP/USDT pairs, which carry a small stablecoin basis versus interbank spot.",
       "Outcomes are graded against this reference tape, not against any broker's execution feed. Levels touched here may print slightly differently on your venue.",
     ],
   },
@@ -42,27 +51,48 @@ const SECTIONS: { title: string; body: string[] }[] = [
 ];
 
 export default function Methodology() {
+  useEffect(() => {
+    document.title = "Engine Methodology & Rules — KR-Signal";
+  }, []);
+
   return (
     <Layout>
       <section className="py-10">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
+        <p className="text-xs font-medium uppercase tracking-widest text-emerald-400">
           How the numbers are made
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
-          Methodology
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          Engine methodology & rules
         </h1>
-        <p className="mt-2 max-w-2xl text-zinc-400">
-          The counting rules behind every number on the track record page —
-          written down so the record can be checked, not just believed.
+        <p className="mt-2 max-w-2xl text-base text-zinc-400 leading-relaxed">
+          The counting rules behind every number on our track record page — written down in detail so the record can be independently checked.
         </p>
 
+        {/* Quick Rules at a Glance Strip */}
+        <div className="mt-8 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-5 shadow-xs">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+            Rules at a Glance
+          </h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 font-mono text-xs">
+            {QUICK_RULES.map((r) => (
+              <div key={r.label} className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+                <span className="block text-[10px] font-sans uppercase tracking-wider text-zinc-400 font-medium">
+                  {r.label}
+                </span>
+                <span className="mt-1 block font-bold text-emerald-300 tabular-nums">{r.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Detailed Sections */}
         <div className="mt-10 grid gap-6">
           {SECTIONS.map((s) => (
             <article
               key={s.title}
-              className="rounded-xl border border-white/5 bg-white/[0.03] p-6"
+              className="rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-xs"
             >
-              <h2 className="font-medium text-white">{s.title}</h2>
+              <h2 className="text-lg font-semibold text-white">{s.title}</h2>
               {s.body.map((p, i) => (
                 <p key={i} className="mt-3 text-sm leading-relaxed text-zinc-400">
                   {p}
