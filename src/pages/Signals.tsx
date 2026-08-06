@@ -1,10 +1,9 @@
 import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
-import { supabase } from "@/utils/supabase";
+import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 import { INSTRUMENTS, type SignalStatus } from "@contracts/instruments";
-import type { Signal } from "@db/schema";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] = [
@@ -17,7 +16,6 @@ const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] =
 export default function Signals() {
   const [symbol, setSymbol] = useState<string | undefined>();
   const [tab, setTab] = useState<"all" | SignalStatus | "closed">("all");
-  const [supabaseSignals, setSupabaseSignals] = useState<Signal[]>([]);
 
   const query = trpc.signals.list.useQuery(
     {
@@ -29,31 +27,15 @@ export default function Signals() {
     { refetchInterval: 60_000 },
   );
 
-  useEffect(() => {
-    async function fetchFromSupabase() {
-      try {
-        let q = supabase.from("signals").select("*").order("id", { ascending: false });
-        if (symbol) {
-          q = q.eq("symbol", symbol);
-        }
-        if (tab === "closed") {
-          q = q.not("status", "in", "(open,expired)");
-        } else if (tab !== "all") {
-          q = q.eq("status", tab);
-        }
-        const { data, error } = await q;
-        if (data && !error) {
-          setSupabaseSignals(data as unknown as Signal[]);
-        }
-      } catch (err) {
-        console.error("Supabase fetch error:", err);
-      }
-    }
-    fetchFromSupabase();
-  }, [symbol, tab]);
+  const { supabaseSignals } = useSupabaseSignals({
+    symbol,
+    status: tab,
+    closedOnly: tab === "closed",
+  });
 
   const displaySignals = (query.data && query.data.length > 0) ? query.data : supabaseSignals;
   const isLoading = query.isLoading && supabaseSignals.length === 0;
+
 
   return (
     <Layout>

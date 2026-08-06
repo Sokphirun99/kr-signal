@@ -2,11 +2,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { env } from "../lib/env";
 import * as schema from "@db/schema";
-import * as relations from "@db/relations";
 
-const fullSchema = { ...schema, ...relations };
-
-let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
+let instance: ReturnType<typeof drizzle<typeof schema>>;
 
 export function getDb() {
   if (!instance) {
@@ -17,7 +14,8 @@ export function getDb() {
       max: 1,
       connect_timeout: 10,
     });
-    instance = drizzle(client, { schema: fullSchema });
+    instance = drizzle(client, { schema });
   }
   return instance;
 }
+

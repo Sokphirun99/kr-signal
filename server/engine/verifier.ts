@@ -13,6 +13,13 @@
 
 import type { Candle } from "./binance";
 import type { Signal } from "@db/schema";
+import { atrSeries } from "./indicators";
+
+export let TRAIL_MODE: "fixed" | "chandelier" = "chandelier";
+
+export function setTrailMode(mode: "fixed" | "chandelier"): void {
+  TRAIL_MODE = mode;
+}
 
 export interface Verdict {
   status: "open" | "tp1" | "tp2" | "tp3" | "sl" | "be" | "expired" | "undecidable";
@@ -47,10 +54,19 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
       : base;
   }
 
+  // Pre-compute ATR series over candles
+  const atrs = atrSeries(candles, 14);
+  const candleIndexMap = new Map<number, number>();
+  for (let k = 0; k < candles.length; k++) {
+    candleIndexMap.set(candles[k].openTime, k);
+  }
+
   let filled = signal.entryFilled;
   let stop = signal.stopLoss;
   let tp1Hit = false;
   let tp2Hit = false;
+  let highestCloseSinceTP2 = -Infinity;
+  let lowestCloseSinceTP2 = Infinity;
 
   for (const c of tape) {
     // 1. Entry fill
@@ -81,14 +97,16 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
       };
     };
 
-    // 2. Conservative same-candle rule: check stop before targets.
+    // 2. Conservative same-candle rule: check stop BEFORE targets.
     //    Gap rule: if the candle OPENS beyond the stop, the realistic fill is
     //    the open price — the stop level itself never traded. After TP1 this
     //    can turn a break-even into a small loss; grade it honestly.
     if (isBuy ? c.low <= stop : c.high >= stop) {
       const gappedThrough = isBuy ? c.open < stop : c.open > stop;
       const exit = gappedThrough ? c.open : stop;
-      const status: Verdict["status"] = tp1Hit
+      const status: Verdict["status"] = tp2Hit && TRAIL_MODE === "chandelier"
+        ? "tp2"
+        : tp1Hit
         ? (isBuy ? exit >= signal.entry : exit <= signal.entry)
           ? "be"
           : "sl"
@@ -99,10 +117,37 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
     // 3. Targets in order
     if (!tp1Hit && touched(c, signal.tp1)) {
       tp1Hit = true;
-      stop = signal.entry; // stop → break-even
+      stop = isBuy ? Math.max(stop, signal.entry) : Math.min(stop, signal.entry); // stop → break-even
     }
-    if (tp1Hit && !tp2Hit && touched(c, signal.tp2)) tp2Hit = true;
-    if (tp2Hit && touched(c, signal.tp3)) {
+
+    if (tp1Hit && !tp2Hit && touched(c, signal.tp2)) {
+      tp2Hit = true;
+      if (TRAIL_MODE === "chandelier") {
+        highestCloseSinceTP2 = c.close;
+        lowestCloseSinceTP2 = c.close;
+        const k = candleIndexMap.get(c.openTime) ?? -1;
+        const atrVal = (k >= 0 && atrs[k] !== null && atrs[k]! > 0) ? atrs[k]! : (risk / 1.5);
+        if (isBuy) {
+          const trail = c.close - 2.5 * atrVal;
+          stop = Math.max(stop, trail);
+        } else {
+          const trail = c.close + 2.5 * atrVal;
+          stop = Math.min(stop, trail);
+        }
+      }
+    } else if (tp2Hit && TRAIL_MODE === "chandelier") {
+      highestCloseSinceTP2 = Math.max(highestCloseSinceTP2, c.close);
+      lowestCloseSinceTP2 = Math.min(lowestCloseSinceTP2, c.close);
+      const k = candleIndexMap.get(c.openTime) ?? -1;
+      const atrVal = (k >= 0 && atrs[k] !== null && atrs[k]! > 0) ? atrs[k]! : (risk / 1.5);
+      if (isBuy) {
+        const trail = highestCloseSinceTP2 - 2.5 * atrVal;
+        stop = Math.max(stop, trail);
+      } else {
+        const trail = lowestCloseSinceTP2 + 2.5 * atrVal;
+        stop = Math.min(stop, trail);
+      }
+    } else if (tp2Hit && TRAIL_MODE === "fixed" && touched(c, signal.tp3)) {
       return closeIt("tp3", signal.tp3);
     }
 
@@ -117,6 +162,7 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
       };
     }
   }
+
 
   // Ran out of tape — signal is either still live or past expiry unverifiable
   if (now > signal.expiresAt.getTime()) {

@@ -17,9 +17,10 @@ import {
   type Timeframe,
 } from "@contracts/instruments";
 import { fetchClosedKlines } from "./binance";
-import { generateSetup } from "./strategy";
+import { generateSetup, HTF_MAP, isHtfVetoed } from "./strategy";
 import { gateSetup } from "./gate";
 import { verifySignal } from "./verifier";
+import { fetchFundingRate } from "./futures";
 
 const SCAN_INTERVAL_MS = 5 * 60_000; // one pipeline pass per 5 minutes max
 let lastPass = 0;
@@ -90,58 +91,85 @@ export async function runPipelinePass(): Promise<PassReport> {
 
   // ---- Stage 2: scan for new setups ---------------------------------------
   for (const instrument of INSTRUMENTS) {
+    let fundingRate: number | null = null;
+    if (instrument.market === "crypto") {
+      try {
+        fundingRate = await fetchFundingRate(instrument.symbol);
+      } catch {
+        fundingRate = null;
+      }
+    }
+
     for (const timeframe of TIMEFRAMES) {
       let candidates = 0;
       let published = 0;
       let note: string | null = null;
       try {
         const candles = await klinesFor(instrument.pair, timeframe);
-        const setup = generateSetup(candles);
+        const setup = generateSetup(candles, timeframe, fundingRate);
+
         if (!setup) {
           note = "no setup";
         } else {
           candidates = 1;
           report.candidates++;
-          const existing = await getDb()
-            .select({ id: signals.id })
-            .from(signals)
-            .where(
-              and(
-                eq(signals.symbol, instrument.symbol),
-                eq(signals.timeframe, timeframe),
-                eq(signals.side, setup.side),
-                eq(signals.status, "open"),
-              ),
-            )
-            .limit(1);
 
-          const gate = gateSetup(setup, existing.length > 0);
-          if (!gate.pass) {
-            note = gate.reasons.join("; ");
+          const fundingActive = fundingRate != null && Math.abs(fundingRate) > 0.0005;
+          const fundingNote = fundingActive
+            ? `funding: ${fundingRate! > 0 ? "+" : ""}${fundingRate!.toFixed(6)}`
+            : null;
+
+          const htfTf = HTF_MAP[timeframe];
+          const htfCandles = htfTf ? await klinesFor(instrument.pair, htfTf) : undefined;
+          const vetoed = isHtfVetoed(timeframe, setup.side, htfCandles);
+
+          if (vetoed) {
+            note = fundingNote ? `htf-veto; ${fundingNote}` : "htf-veto";
           } else {
-            const row: InsertSignal = {
-              symbol: instrument.symbol,
-              market: instrument.market,
-              timeframe,
-              style: setup.style,
-              side: setup.side,
-              entry: setup.entry,
-              stopLoss: setup.stopLoss,
-              tp1: setup.tp1,
-              tp2: setup.tp2,
-              tp3: setup.tp3,
-              confidence: gate.confidence,
-              engine: "rules",
-              setupAt: new Date(setup.setupAt),
-              expiresAt: new Date(Date.now() + EXPIRY_MS[timeframe]),
-            };
-            try {
-              await getDb().insert(signals).values(row);
-              published = 1;
-              report.published++;
-            } catch (insertErr) {
-              // Duplicate setup candle — already in the ledger
-              note = "duplicate setup (already recorded)";
+            const existing = await getDb()
+              .select({ id: signals.id })
+              .from(signals)
+              .where(
+                and(
+                  eq(signals.symbol, instrument.symbol),
+                  eq(signals.timeframe, timeframe),
+                  eq(signals.side, setup.side),
+                  eq(signals.status, "open"),
+                ),
+              )
+              .limit(1);
+
+            const gate = gateSetup(setup, existing.length > 0);
+            if (!gate.pass) {
+              const reasonText = gate.reasons.join("; ");
+              note = fundingNote ? `${reasonText}; ${fundingNote}` : reasonText;
+            } else {
+              if (fundingNote) note = fundingNote;
+
+              const row: InsertSignal = {
+                symbol: instrument.symbol,
+                market: instrument.market,
+                timeframe,
+                style: setup.style,
+                side: setup.side,
+                entry: setup.entry,
+                stopLoss: setup.stopLoss,
+                tp1: setup.tp1,
+                tp2: setup.tp2,
+                tp3: setup.tp3,
+                confidence: gate.confidence,
+                engine: "rules",
+                setupAt: new Date(setup.setupAt),
+                expiresAt: new Date(Date.now() + EXPIRY_MS[timeframe]),
+              };
+              try {
+                await getDb().insert(signals).values(row);
+                published = 1;
+                report.published++;
+              } catch (insertErr) {
+                // Duplicate setup candle — already in the ledger
+                note = "duplicate setup (already recorded)";
+              }
             }
           }
         }

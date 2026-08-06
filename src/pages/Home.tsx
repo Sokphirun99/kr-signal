@@ -3,62 +3,23 @@ import TickerTape from "@/components/TickerTape";
 import StatCard from "@/components/StatCard";
 import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
-import { supabase } from "@/utils/supabase";
+import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
 import { Link } from "react-router";
-import { useState, useEffect } from "react";
 import { ArrowRight, ShieldCheck, Eye, Scale } from "lucide-react";
-
-function computeTrackFromSignals(signals: any[]) {
-  let closed = 0;
-  let wins = 0;
-  let totalR = 0;
-
-  for (const s of signals) {
-    const status = s.status;
-    const r = Number(s.rMultiple ?? s.r_multiple ?? 0);
-    if (["tp1", "tp2", "tp3", "sl", "be"].includes(status)) {
-      closed++;
-      totalR += r;
-      if (r > 0) wins++;
-    }
-  }
-
-  const winRate = closed > 0 ? wins / closed : null;
-  const avgR = closed > 0 ? Number((totalR / closed).toFixed(2)) : null;
-
-  return {
-    closed,
-    wins,
-    winRate,
-    totalR: Number(totalR.toFixed(2)),
-    avgR,
-  };
-}
 
 export default function Home() {
   const track = trpc.signals.trackRecord.useQuery();
   const funnel = trpc.signals.funnel.useQuery();
   const live = trpc.signals.list.useQuery({ status: "open", limit: 3 });
 
-  const [supabaseSignals, setSupabaseSignals] = useState<any[]>([]);
-
-  useEffect(() => {
-    async function fetchFromSupabase() {
-      try {
-        const { data } = await supabase.from("signals").select("*").order("id", { ascending: false });
-        if (data) setSupabaseSignals(data);
-      } catch (err) {
-        console.error("Supabase fetch error:", err);
-      }
-    }
-    fetchFromSupabase();
-  }, []);
+  const { supabaseSignals } = useSupabaseSignals();
 
   const fallbackTrack = computeTrackFromSignals(supabaseSignals);
   const tr = track.data ?? (supabaseSignals.length > 0 ? fallbackTrack : undefined);
   const displayLive = (live.data && live.data.length > 0)
     ? live.data
     : supabaseSignals.filter((s) => s.status === "open").slice(0, 3);
+
 
   return (
     <Layout>
