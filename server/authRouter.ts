@@ -164,6 +164,8 @@ export const authRouter = createRouter({
         email: user.email,
         name: user.name,
         role: user.role,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
       };
     } catch (err: any) {
       console.error("Login session creation error:", err);

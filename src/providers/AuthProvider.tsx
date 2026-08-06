@@ -25,13 +25,15 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const utils = trpc.useUtils();
   const { data: user, isLoading, refetch } = trpc.auth.me.useQuery(undefined, {
     retry: false,
-    staleTime: 1000 * 60 * 5, // 5 mins
+    staleTime: 1000 * 30, // 30s
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
+      utils.auth.me.setData(undefined, null);
       refetch();
     },
   });

@@ -80,8 +80,11 @@ export default function Signals() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
+
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      utils.auth.me.setData(undefined, data);
       refetchUser();
     },
     onError: (err) => {

@@ -15,8 +15,11 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
+
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      utils.auth.me.setData(undefined, data);
       refetchUser();
       navigate("/");
     },
