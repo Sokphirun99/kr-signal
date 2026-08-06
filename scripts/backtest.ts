@@ -41,7 +41,7 @@ interface ResultRow {
   profitFactor: number;
 }
 
-const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
+const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT"];
 const WINDOW_SIZE = 300;
 
 function formatProfitFactor(pf: number): string {

@@ -63,7 +63,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Data sources and basis",
     body: [
-      "All instruments resolve through Binance spot pairs. Crypto uses direct pairs (BTCUSDT, ETHUSDT, SOLUSDT). Gold uses PAXG/USDT — a token redeemable for one troy ounce of gold, tracking spot with a small basis. EUR/USD and GBP/USD use EUR/USDT and GBP/USDT pairs, which carry a small stablecoin basis versus interbank spot.",
+      "All instruments resolve through Binance spot pairs. Crypto uses direct pairs (BTCUSDT, ETHUSDT). Gold uses PAXG/USDT — a token redeemable for one troy ounce of gold, tracking spot with a small basis. EUR/USD and GBP/USD use EUR/USDT and GBP/USDT pairs, which carry a small stablecoin basis versus interbank spot.",
       "Outcomes are graded against this reference tape, not against any broker's execution feed. Levels touched here may print slightly differently on your venue.",
     ],
   },
