@@ -46,7 +46,7 @@ app.use("/api/trpc/*", async (c) => {
 
 app.onError((err, c) => {
   console.error("Hono error:", err);
-  return c.json({ error: String(err.message || err), stack: err.stack }, 500);
+  return c.json({ error: "Internal Server Error" }, 500);
 });
 
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
