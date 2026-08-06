@@ -1,14 +1,9 @@
 {
   "outputDirectory": "dist/public",
-  "crons": [
-    {
-      "path": "/api/scan",
-      "schedule": "*/5 * * * *"
-    }
-  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
+
 
