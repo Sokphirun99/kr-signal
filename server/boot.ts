@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -14,14 +14,14 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
-const handleScan = async (c: any) => {
+const handleScan = async (c: Context) => {
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = c.req.header("authorization");
-    const paramSecret = c.req.query("secret");
-    if (authHeader !== `Bearer ${cronSecret}` && paramSecret !== cronSecret) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
+  if (!cronSecret) {
+    return c.json({ error: "CRON_SECRET not configured" }, 500);
+  }
+  const authHeader = c.req.header("authorization");
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
   try {
     const report = await forceRunPipelinePass();

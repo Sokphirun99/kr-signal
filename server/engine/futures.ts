@@ -36,7 +36,7 @@ export async function fetchFundingRate(symbol: string): Promise<number | null> {
 
     fundingCache.set(symbol, { rate, fetchedAt: Date.now() });
     return rate;
-  } catch (err) {
+  } catch {
     // Failure fallback: cache null, neutral score, never block pipeline
     fundingCache.set(symbol, { rate: null, fetchedAt: Date.now() });
     return null;

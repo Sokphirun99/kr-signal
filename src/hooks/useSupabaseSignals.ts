@@ -8,7 +8,7 @@ export interface SupabaseSignalFilters {
   closedOnly?: boolean;
 }
 
-export function computeTrackFromSignals(signals: any[]) {
+export function computeTrackFromSignals(signals: (Signal | Record<string, unknown>)[]) {
   let closed = 0;
   let wins = 0;
   let nonWins = 0;
@@ -16,8 +16,9 @@ export function computeTrackFromSignals(signals: any[]) {
   let expired = 0;
   let undecidable = 0;
 
-  for (const s of signals) {
-    const status = s.status;
+  for (const rawSignal of signals) {
+    const s = rawSignal as Record<string, unknown>;
+    const status = String(s.status ?? "");
     const r = Number(s.rMultiple ?? s.r_multiple ?? 0);
     if (status === "expired") {
       expired++;

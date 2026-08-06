@@ -343,7 +343,7 @@ export default function TrackRecord() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.byMonth.map((m: any) => (
+                    {tr.byMonth.map((m: { month: string; closed: number; wins: number; winRate: number | null }) => (
                       <tr key={m.month} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                         <td className="px-5 py-3 font-mono text-zinc-200 tabular-nums">{m.month}</td>
                         <td className="px-5 py-3 font-mono text-zinc-300 tabular-nums">{m.closed}</td>
@@ -374,7 +374,7 @@ export default function TrackRecord() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.byMarket.map((m: any) => (
+                    {tr.byMarket.map((m: { market: string; closed: number; wins: number; winRate: number | null }) => (
                       <tr key={m.market} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                         <td className="px-5 py-3 capitalize text-zinc-200 font-medium">{m.market}</td>
                         <td className="px-5 py-3 font-mono text-zinc-300 tabular-nums">{m.closed}</td>

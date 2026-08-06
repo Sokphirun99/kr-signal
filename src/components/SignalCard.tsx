@@ -145,9 +145,10 @@ function getTimeLeft(expiresAt: Date | string): { text: string; urgencyCls: stri
   return { text, urgencyCls: "text-zinc-400" };
 }
 
-export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
-  const signal = {
-    ...raw,
+export default function SignalCard({ signal: rawSignal }: { signal: Signal | Record<string, unknown> }) {
+  const raw = rawSignal as Record<string, unknown>;
+  const signal: Signal = {
+    ...(raw as unknown as Signal),
     entry: Number(raw.entry ?? 0),
     stopLoss: Number(raw.stopLoss ?? raw.stop_loss ?? 0),
     tp1: Number(raw.tp1 ?? 0),
@@ -155,11 +156,11 @@ export default function SignalCard({ signal: raw }: { signal: Signal | any }) {
     tp3: Number(raw.tp3 ?? 0),
     entryFilled: Boolean(raw.entryFilled ?? raw.entry_filled ?? false),
     confidence: Number(raw.confidence ?? 0),
-    rMultiple: raw.rMultiple ?? raw.r_multiple ?? null,
-    exitPrice: raw.exitPrice ?? raw.exit_price ?? null,
-    openedAt: raw.openedAt ?? raw.opened_at ?? new Date(),
-    expiresAt: raw.expiresAt ?? raw.expires_at ?? new Date(),
-    closedAt: raw.closedAt ?? raw.closed_at ?? null,
+    rMultiple: (raw.rMultiple ?? raw.r_multiple ?? null) as number | null,
+    exitPrice: (raw.exitPrice ?? raw.exit_price ?? null) as number | null,
+    openedAt: (raw.openedAt ?? raw.opened_at ?? new Date()) as Date,
+    expiresAt: (raw.expiresAt ?? raw.expires_at ?? new Date()) as Date,
+    closedAt: (raw.closedAt ?? raw.closed_at ?? null) as Date | null,
   };
 
   const inst = getInstrument(signal.symbol);

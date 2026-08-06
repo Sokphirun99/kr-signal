@@ -9,7 +9,7 @@
 
 import { getDb } from "../queries/connection";
 import { signals, scanRuns, type InsertSignal } from "@db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import {
   INSTRUMENTS,
   TIMEFRAMES,
@@ -41,6 +41,22 @@ export interface PassReport {
 
 export async function ensureFresh(): Promise<void> {
   if (running || Date.now() - lastPass < SCAN_INTERVAL_MS) return;
+  try {
+    const latestRun = await getDb()
+      .select({ ranAt: scanRuns.ranAt })
+      .from(scanRuns)
+      .orderBy(desc(scanRuns.ranAt))
+      .limit(1);
+    if (latestRun.length > 0 && latestRun[0].ranAt) {
+      const dbLastPass = latestRun[0].ranAt.getTime();
+      if (Date.now() - dbLastPass < SCAN_INTERVAL_MS) {
+        lastPass = dbLastPass;
+        return;
+      }
+    }
+  } catch (err) {
+    console.error("[ensureFresh DB Throttle Check Error]:", err);
+  }
   return forceRunPipelinePass().then(() => undefined);
 }
 
