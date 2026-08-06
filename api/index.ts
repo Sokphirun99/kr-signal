@@ -12,8 +12,7 @@ export default async function (req: any, res: any) {
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
-        error: String(err?.message || err),
-        stack: err?.stack,
+        error: String(err?.message || "Internal Server Error"),
       }),
     );
   }

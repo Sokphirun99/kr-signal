@@ -7,10 +7,16 @@ let instance: ReturnType<typeof drizzle<typeof schema>>;
 
 export function getDb() {
   if (!instance) {
-    const isSupabase = env.databaseUrl.includes("supabase");
+    if (!env.databaseUrl) {
+      throw new Error("DATABASE_URL environment variable is missing.");
+    }
+    const isSupabase = env.databaseUrl.includes("supabase") || env.databaseUrl.includes("pooler");
+    const isProd = env.isProduction || Boolean(process.env.VERCEL);
+    const useSsl = isSupabase || isProd;
+
     const client = postgres(env.databaseUrl, {
       prepare: false,
-      ssl: isSupabase ? { rejectUnauthorized: false } : false,
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
       max: 1,
       connect_timeout: 10,
     });

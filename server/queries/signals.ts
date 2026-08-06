@@ -11,23 +11,23 @@ import {
   type SignalStatus,
 } from "@contracts/instruments";
 
-export async function listSignals(filters: {
-  symbol?: string;
-  status?: SignalStatus;
-  closedOnly?: boolean;
-  limit?: number;
+export async function listSignals(filters?: {
+  symbol?: string | null;
+  status?: SignalStatus | null;
+  closedOnly?: boolean | null;
+  limit?: number | null;
 }) {
   const conditions = [];
-  if (filters.symbol) conditions.push(eq(signals.symbol, filters.symbol));
-  if (filters.status) conditions.push(eq(signals.status, filters.status));
-  if (filters.closedOnly) conditions.push(inArray(signals.status, CLOSED_STATUSES));
+  if (filters?.symbol) conditions.push(eq(signals.symbol, filters.symbol));
+  if (filters?.status) conditions.push(eq(signals.status, filters.status));
+  if (filters?.closedOnly) conditions.push(inArray(signals.status, CLOSED_STATUSES));
 
   return getDb()
     .select()
     .from(signals)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(signals.openedAt))
-    .limit(filters.limit ?? 100);
+    .limit(filters?.limit ?? 100);
 }
 
 export interface TrackRecord {

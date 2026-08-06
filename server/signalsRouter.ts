@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { ensureFresh } from "./engine/pipeline";
 import { listSignals, computeTrackRecord, computeFunnel } from "./queries/signals";
@@ -12,30 +13,62 @@ export const signalsRouter = createRouter({
     .input(
       z
         .object({
-          symbol: z.string().optional(),
+          symbol: z.string().nullish(),
           status: z
             .enum(["open", "tp1", "tp2", "tp3", "sl", "be", "expired", "undecidable"])
-            .optional(),
-          closedOnly: z.boolean().optional(),
-          limit: z.number().min(1).max(500).optional(),
+            .nullish(),
+          closedOnly: z.boolean().nullish(),
+          limit: z.number().min(1).max(500).nullish(),
         })
-        .optional(),
+        .nullish(),
     )
     .query(async ({ input }) => {
       await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
-      return listSignals(input ?? {});
+      try {
+        return await listSignals({
+          symbol: input?.symbol ?? undefined,
+          status: input?.status ?? undefined,
+          closedOnly: input?.closedOnly ?? undefined,
+          limit: input?.limit ?? undefined,
+        });
+      } catch (err) {
+        console.error("listSignals query error:", err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch signals from database.",
+          cause: err,
+        });
+      }
     }),
 
   /** Verified track record — computed only from market-graded outcomes */
   trackRecord: publicQuery.query(async () => {
     await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
-    return computeTrackRecord();
+    try {
+      return await computeTrackRecord();
+    } catch (err) {
+      console.error("computeTrackRecord query error:", err);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to compute track record.",
+        cause: err,
+      });
+    }
   }),
 
   /** Audit funnel: scanned → candidate → published over the last 7 days */
   funnel: publicQuery.query(async () => {
     await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
-    return computeFunnel(7);
+    try {
+      return await computeFunnel(7);
+    } catch (err) {
+      console.error("computeFunnel query error:", err);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to compute funnel.",
+        cause: err,
+      });
+    }
   }),
 
   /** Live ticker tape across all instruments */
