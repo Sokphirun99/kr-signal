@@ -3,6 +3,8 @@ import app from "../server/boot";
 
 const vercelHandler = handle(app);
 
+export const maxDuration = 60;
+
 export default async function (req: any, res: any) {
   try {
     return await vercelHandler(req, res);

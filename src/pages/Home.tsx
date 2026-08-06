@@ -63,9 +63,17 @@ export default function Home() {
         />
         <StatCard
           label="Win rate"
-          value={tr?.winRate != null ? `${Math.round(tr.winRate * 100)}%` : "—"}
-          sub={tr ? `${tr.wins} wins of ${tr.closed} closed` : "awaiting first outcomes"}
-          accent="green"
+          value={tr?.winRate != null && tr.closed > 0 ? `${Math.round(tr.winRate * 100)}%` : "—"}
+          sub={tr && tr.closed > 0 ? `${tr.wins} wins of ${tr.closed} closed` : "awaiting first outcomes"}
+          accent={
+            !tr || tr.closed === 0 || tr.winRate == null
+              ? "neutral"
+              : tr.winRate > 0.55
+              ? "green"
+              : tr.winRate >= 0.40
+              ? "amber"
+              : "red"
+          }
         />
         <StatCard
           label="Total R"

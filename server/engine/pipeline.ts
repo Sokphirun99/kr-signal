@@ -36,14 +36,23 @@ export interface PassReport {
 
 export async function ensureFresh(): Promise<void> {
   if (running || Date.now() - lastPass < SCAN_INTERVAL_MS) return;
+  return forceRunPipelinePass().then(() => undefined);
+}
+
+export async function forceRunPipelinePass(): Promise<PassReport> {
+  if (running) {
+    return { verified: 0, closed: 0, candidates: 0, published: 0, errors: ["Pipeline pass already running"] };
+  }
   running = true;
   try {
-    await runPipelinePass();
+    const report = await runPipelinePass();
     lastPass = Date.now();
+    return report;
   } finally {
     running = false;
   }
 }
+
 
 export async function runPipelinePass(): Promise<PassReport> {
   const report: PassReport = { verified: 0, closed: 0, candidates: 0, published: 0, errors: [] };

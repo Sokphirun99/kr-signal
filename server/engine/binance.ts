@@ -3,7 +3,6 @@
  * Uses the public market-data host (no API key required).
  */
 
-const BASE = "https://data-api.binance.vision";
 const TIMEOUT_MS = 10_000;
 
 export interface Candle {
@@ -24,16 +23,27 @@ export interface Ticker24h {
   quoteVolume: number;
 }
 
+const BASE_HOSTS = [
+  "https://data-api.binance.vision",
+  "https://api.binance.com",
+];
+
 async function fetchJson<T>(path: string): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${BASE}${path}`, { signal: controller.signal });
-    if (!res.ok) throw new Error(`Binance HTTP ${res.status} for ${path}`);
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timer);
+  let lastErr: unknown;
+  for (const host of BASE_HOSTS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(`${host}${path}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`Binance HTTP ${res.status} for ${host}${path}`);
+      return (await res.json()) as T;
+    } catch (err) {
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw lastErr ?? new Error(`Failed to fetch ${path} from all Binance hosts`);
 }
 
 /**
@@ -85,8 +95,27 @@ export async function fetchTicker24h(pair: string): Promise<Ticker24h> {
 }
 
 export async function fetchAllTickers(pairs: string[]): Promise<Ticker24h[]> {
+  try {
+    const encodedSymbols = encodeURIComponent(JSON.stringify(pairs));
+    const raw = await fetchJson<Record<string, string>[]>(
+      `/api/v3/ticker/24hr?symbols=${encodedSymbols}`,
+    );
+    if (Array.isArray(raw)) {
+      return raw.map((t) => ({
+        pair: String(t.symbol),
+        lastPrice: Number(t.lastPrice),
+        priceChangePct: Number(t.priceChangePercent),
+        volume: Number(t.volume),
+        quoteVolume: Number(t.quoteVolume),
+      }));
+    }
+  } catch {
+    // Fall back to individual ticker fetches
+  }
+
   const results = await Promise.allSettled(pairs.map((p) => fetchTicker24h(p)));
   return results
     .filter((r): r is PromiseFulfilledResult<Ticker24h> => r.status === "fulfilled")
     .map((r) => r.value);
 }
+

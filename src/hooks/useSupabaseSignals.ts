@@ -48,6 +48,9 @@ export function computeTrackFromSignals(signals: any[]) {
     currentStreak: 0,
     byMonth: [],
     byMarket: [],
+    equityCurve: [],
+    firstOutcomeAt: null,
+    lastOutcomeAt: null,
   };
 }
 

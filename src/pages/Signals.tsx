@@ -1,10 +1,47 @@
 import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 import { INSTRUMENTS, type SignalStatus } from "@contracts/instruments";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+
+/** Mirrors the SignalCard shell — header row + levels grid + footer */
+function SignalCardSkeleton() {
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.03] p-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-9 w-9 rounded-lg" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-4 w-20 rounded-full" />
+        </div>
+      </div>
+      {/* Price levels grid */}
+      <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="space-y-1">
+            <Skeleton className="h-2.5 w-8" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+        ))}
+      </div>
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+    </div>
+  );
+}
 
 const STATUS_TABS: { value: SignalStatus | "all" | "closed"; label: string }[] = [
   { value: "all", label: "All" },
@@ -91,9 +128,11 @@ export default function Signals() {
 
         <div className="mt-8 grid gap-4">
           {isLoading && (
-            <p className="py-16 text-center text-sm text-zinc-500">
-              Loading the ledger…
-            </p>
+            <>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SignalCardSkeleton key={i} />
+              ))}
+            </>
           )}
           {!isLoading && displaySignals.length === 0 && (
             <p className="rounded-xl border border-dashed border-white/10 py-16 text-center text-sm text-zinc-500">

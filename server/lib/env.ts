@@ -2,7 +2,10 @@ import "dotenv/config";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-  console.warn("[WARNING] DATABASE_URL is not set in environment variables.");
+  console.error(
+    "[FATAL] DATABASE_URL is not set. " +
+    "Set it in Vercel → Settings → Environment Variables and redeploy."
+  );
 }
 
 export const env = {

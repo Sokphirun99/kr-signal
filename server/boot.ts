@@ -6,11 +6,34 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 
+import { forceRunPipelinePass } from "./engine/pipeline";
+
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+const handleScan = async (c: any) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = c.req.header("authorization");
+    const paramSecret = c.req.query("secret");
+    if (authHeader !== `Bearer ${cronSecret}` && paramSecret !== cronSecret) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+  }
+  try {
+    const report = await forceRunPipelinePass();
+    return c.json({ ok: true, report });
+  } catch (err) {
+    console.error("/api/scan error:", err);
+    return c.json({ error: String(err) }, 500);
+  }
+};
+
+app.get("/api/scan", handleScan);
+app.post("/api/scan", handleScan);
 
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({

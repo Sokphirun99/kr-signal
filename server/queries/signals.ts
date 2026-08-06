@@ -30,6 +30,15 @@ export async function listSignals(filters?: {
     .limit(filters?.limit ?? 100);
 }
 
+export interface EquityCurvePoint {
+  /** ISO date string from closedAt */
+  date: string;
+  /** Cumulative R-multiple at this point */
+  cumulativeR: number;
+  /** The individual trade R */
+  tradeR: number;
+}
+
 export interface TrackRecord {
   closed: number;
   wins: number;
@@ -46,6 +55,7 @@ export interface TrackRecord {
   lastOutcomeAt: Date | null;
   byMarket: { market: string; closed: number; wins: number; winRate: number | null }[];
   byMonth: { month: string; closed: number; wins: number; winRate: number | null }[];
+  equityCurve: EquityCurvePoint[];
 }
 
 export async function computeTrackRecord(): Promise<TrackRecord> {
@@ -119,6 +129,18 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
     }
   }
 
+  // Build equity curve: one point per graded signal in chronological order
+  let cumulative = 0;
+  const equityCurve: EquityCurvePoint[] = closed.map((s) => {
+    const tradeR = Math.round((s.rMultiple ?? 0) * 100) / 100;
+    cumulative = Math.round((cumulative + tradeR) * 100) / 100;
+    return {
+      date: s.closedAt ? s.closedAt.toISOString() : new Date().toISOString(),
+      cumulativeR: cumulative,
+      tradeR,
+    };
+  });
+
   return {
     closed: closed.length,
     wins: wins.length,
@@ -145,6 +167,7 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
         ...v,
         winRate: v.closed ? v.wins / v.closed : null,
       })),
+    equityCurve,
   };
 }
 

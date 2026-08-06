@@ -17,14 +17,16 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
 function formatLocalTime(dateInput: Date | string): string {
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString("en-GB", {
     day: "2-digit",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
 }
+
 
 function Level({ label, value, decimals }: { label: string; value: number; decimals: number }) {
   return (
