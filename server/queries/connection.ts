@@ -18,7 +18,9 @@ export function getDb() {
       prepare: false,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
       max: 1,
-      connect_timeout: 10,
+      connect_timeout: 5,
+      idle_timeout: 5,
+      fetch_types: false,
     });
     instance = drizzle(client, { schema });
   }

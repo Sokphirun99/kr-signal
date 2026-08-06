@@ -1,11 +1,10 @@
-import { scrypt, randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
-
-const scryptAsync = promisify(scrypt);
+import { scryptSync, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
 const TOKEN_BYTES = 32;
+
+const SCRYPT_OPTIONS = { N: 4096, r: 8, p: 1, maxmem: 32 * 1024 * 1024 };
 
 /**
  * Hash a plain text password using Node.js scrypt.
@@ -13,7 +12,7 @@ const TOKEN_BYTES = 32;
  */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(SALT_BYTES).toString("hex");
-  const derivedKey = (await scryptAsync(password, salt, KEY_BYTES)) as Buffer;
+  const derivedKey = scryptSync(password, salt, KEY_BYTES, SCRYPT_OPTIONS);
   return `${salt}:${derivedKey.toString("hex")}`;
 }
 
@@ -29,10 +28,34 @@ export async function verifyPassword(
 
   const [salt, key] = parts;
   const keyBuffer = Buffer.from(key, "hex");
-  const derivedKey = (await scryptAsync(password, salt, KEY_BYTES)) as Buffer;
 
-  if (keyBuffer.length !== derivedKey.length) return false;
-  return timingSafeEqual(keyBuffer, derivedKey);
+  // Fast verify with N=4096
+  try {
+    const derivedKey = scryptSync(password, salt, KEY_BYTES, SCRYPT_OPTIONS);
+    if (
+      keyBuffer.length === derivedKey.length &&
+      timingSafeEqual(keyBuffer, derivedKey)
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Backwards-compatible verify with default N=16384
+  try {
+    const legacyDerivedKey = scryptSync(password, salt, KEY_BYTES);
+    if (
+      keyBuffer.length === legacyDerivedKey.length &&
+      timingSafeEqual(keyBuffer, legacyDerivedKey)
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  return false;
 }
 
 /**
