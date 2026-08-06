@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Activity, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "@/components/UserMenu";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -28,35 +29,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1.5 text-sm">
-            {NAV.map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={cn(
-                  "rounded-lg px-3.5 py-1.5 font-medium transition-all duration-150",
-                  pathname === n.to
-                    ? "bg-white/10 text-white shadow-xs"
-                    : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100",
-                )}
-              >
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+          {/* Right Actions: Desktop Nav + User Menu */}
+          <div className="flex items-center gap-4">
+            {/* Desktop Nav */}
+            <nav className="hidden md:flex items-center gap-1.5 text-sm">
+              {NAV.map((n) => (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  className={cn(
+                    "rounded-lg px-3.5 py-1.5 font-medium transition-all duration-150",
+                    pathname === n.to
+                      ? "bg-white/10 text-white shadow-xs"
+                      : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100",
+                  )}
+                >
+                  {n.label}
+                </Link>
+              ))}
+            </nav>
 
-          {/* Mobile Menu Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white md:hidden"
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileOpen}
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+            <UserMenu />
+
+            {/* Mobile Menu Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white md:hidden"
+              aria-label="Toggle navigation menu"
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
+
 
         {/* Mobile Dropdown Menu */}
         {mobileOpen && (
