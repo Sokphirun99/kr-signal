@@ -167,10 +167,10 @@ export default function Methodology() {
               <p className="text-zinc-400">
                 Need an API key? Request access by contacting our team at{" "}
                 <a
-                  href="mailto:api@kr-signal.internal"
+                  href="mailto:khiev.sokpirun999@gmail.com"
                   className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
                 >
-                  api@kr-signal.internal
+                  khiev.sokpirun999@gmail.com
                 </a>{" "}
                 with your use case.
               </p>

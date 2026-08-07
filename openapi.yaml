@@ -14,7 +14,7 @@ info:
     - **Rate Limiting**: In-memory sliding window limiter of 60 requests per minute per API key. Returns `429 Too Many Requests` with a `Retry-After` header when exceeded.
   contact:
     name: KR-Signal Developer Relations
-    email: api@kr-signal.internal
+    email: khiev.sokpirun999@gmail.com
 
 servers:
   - url: /api/v1
