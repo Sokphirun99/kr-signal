@@ -29,10 +29,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070a08]/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link to="/" className="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-xs">
-              <Activity className="h-4 w-4" />
-            </span>
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 whitespace-nowrap group">
+            <img
+              src="/favicon.png"
+              alt="KR-Signal Logo"
+              className="h-8 w-8 rounded-full border border-cyan-500/30 object-cover shadow-sm shadow-cyan-500/20 group-hover:scale-105 transition-transform duration-200"
+            />
             <span className="font-semibold text-lg tracking-tight text-white">
               KR<span className="text-emerald-400">-Signal</span>
             </span>
@@ -107,9 +109,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Col 1: Brand */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded bg-emerald-500/15 text-emerald-400">
-                  <Activity className="h-3.5 w-3.5" />
-                </span>
+                <img
+                  src="/favicon.png"
+                  alt="KR-Signal Logo"
+                  className="h-6 w-6 rounded-full border border-cyan-500/30 object-cover shadow-xs"
+                />
                 <span className="font-semibold text-white">KR-Signal</span>
               </div>
               <p className="text-xs leading-relaxed text-zinc-400">
