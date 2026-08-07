@@ -7,6 +7,7 @@ import GlowThreadsBackground from "@/components/GlowThreadsBackground";
 const NAV = [
   { to: "/", label: "Overview" },
   { to: "/signals", label: "Signals" },
+  { to: "/news", label: "News" },
   { to: "/track-record", label: "Track Record" },
   { to: "/methodology", label: "Methodology" },
 ];

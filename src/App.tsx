@@ -7,6 +7,7 @@ const Home = lazy(() => import('./pages/Home'))
 const Signals = lazy(() => import('./pages/Signals'))
 const TrackRecord = lazy(() => import('./pages/TrackRecord'))
 const Methodology = lazy(() => import('./pages/Methodology'))
+const News = lazy(() => import('./pages/News'))
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/signals" element={<Signals />} />
+          <Route path="/news" element={<News />} />
           <Route path="/track-record" element={<TrackRecord />} />
           <Route path="/methodology" element={<Methodology />} />
           <Route path="*" element={<Home />} />

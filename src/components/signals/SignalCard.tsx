@@ -6,6 +6,7 @@ import { InstrumentLogo } from "./InstrumentLogo";
 import { SignalStatusBadge } from "./SignalStatusBadge";
 import { SignalLevels } from "./SignalLevels";
 import { formatDisplayTime, getTimeLeft, normalizeSignal } from "./signalFormat";
+import { SignalNews } from "./SignalNews";
 
 export interface SignalCardProps {
   signal: ClientSignal | Record<string, unknown>;
@@ -116,6 +117,9 @@ export function SignalCard({ signal: rawSignal }: SignalCardProps) {
           </span>
         ) : null}
       </div>
+
+      {/* Related News Context */}
+      <SignalNews symbol={signal.symbol} />
     </div>
   );
 }
