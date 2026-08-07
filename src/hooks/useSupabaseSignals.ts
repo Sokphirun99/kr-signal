@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/utils/supabase";
 import type { Signal } from "@db/schema";
+import { INSTRUMENTS } from "@contracts/instruments";
+
+const VALID_SYMBOLS = INSTRUMENTS.map((i) => i.symbol);
 
 export interface SupabaseSignalFilters {
   symbol?: string;
@@ -69,7 +72,11 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
     async function fetchFromSupabase() {
       setIsLoading(true);
       try {
-        let q = supabase.from("signals").select("*").order("id", { ascending: false });
+        let q = supabase
+          .from("signals")
+          .select("*")
+          .in("symbol", VALID_SYMBOLS)
+          .order("id", { ascending: false });
         if (symbol) {
           q = q.eq("symbol", symbol);
         }

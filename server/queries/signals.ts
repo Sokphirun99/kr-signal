@@ -8,8 +8,11 @@ import { and, desc, eq, ne, inArray, gte, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
   WIN_STATUSES,
+  INSTRUMENTS,
   type SignalStatus,
 } from "@contracts/instruments";
+
+const VALID_SYMBOLS = INSTRUMENTS.map((i) => i.symbol);
 
 export async function listSignals(filters?: {
   symbol?: string | null;
@@ -19,7 +22,7 @@ export async function listSignals(filters?: {
   limit?: number | null;
 }) {
   try {
-    const conditions = [];
+    const conditions = [inArray(signals.symbol, VALID_SYMBOLS)];
     if (filters?.symbol) conditions.push(eq(signals.symbol, filters.symbol));
     if (filters?.status) conditions.push(eq(signals.status, filters.status));
     if (filters?.closedOnly) conditions.push(inArray(signals.status, CLOSED_STATUSES));
@@ -28,7 +31,7 @@ export async function listSignals(filters?: {
     return await getDb()
       .select()
       .from(signals)
-      .where(conditions.length ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(desc(signals.openedAt))
       .limit(filters?.limit ?? 100);
   } catch (err) {

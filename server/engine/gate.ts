@@ -122,20 +122,39 @@ export function scoreSetup(
 export function gateSetup(
   setup: Setup,
   openSignalsExist: boolean,
-  options?: { ignoreVolume?: boolean; ignoreOffHours?: boolean },
+  options?: { ignoreVolume?: boolean; ignoreOffHours?: boolean; symbol?: string | null },
 ): GateResult {
   const reasons: string[] = [];
   const confidence = scoreSetup(setup, options);
+  const isGold = options?.symbol === "XAUUSD" || options?.symbol === "PAXGUSDT";
+  const isForex = options?.symbol === "EURUSD" || options?.symbol === "GBPUSD" || options?.symbol === "EURUSDT" || options?.symbol === "GBPUSDT";
 
   if (openSignalsExist) reasons.push("cooldown: an open signal already exists for this market/direction");
 
   // Off-hours hard veto for 15m timeframe (Saturday/Sunday UTC or 21:00-00:00 UTC)
-  if (!options?.ignoreOffHours && setup.timeframe === "15m") {
+  if (!options?.ignoreOffHours) {
     const setupDate = new Date(setup.setupAt);
     const utcDay = setupDate.getUTCDay(); // 0 = Sun, 6 = Sat
     const utcHour = setupDate.getUTCHours();
-    if (utcDay === 0 || utcDay === 6 || utcHour >= 21) {
-      reasons.push("off-hours");
+
+    if (setup.timeframe === "15m") {
+      if (utcDay === 0 || utcDay === 6 || utcHour >= 21) {
+        reasons.push("off-hours");
+      }
+    }
+
+    // Gold session gating: active London & NY sessions only (06:00 - 21:00 UTC), no weekends
+    if (isGold) {
+      if (utcDay === 0 || utcDay === 6 || utcHour < 6 || utcHour >= 21) {
+        reasons.push("gold-off-session");
+      }
+    }
+
+    // Forex session gating: active London & NY sessions (06:00 - 21:00 UTC), no weekends
+    if (isForex) {
+      if (utcDay === 0 || utcDay === 6 || utcHour < 6 || utcHour >= 21) {
+        reasons.push("forex-off-session");
+      }
     }
   }
 
@@ -151,7 +170,8 @@ export function gateSetup(
   else if (reward1 / risk < 1.4) reasons.push("first target under 1.4R");
 
   const stopDistancePct = risk / setup.entry;
-  if (stopDistancePct < 0.0005) reasons.push("stop too tight — noise would grade it randomly");
+  const minStopPct = isGold ? 0.0015 : isForex ? 0.0003 : 0.0005;
+  if (stopDistancePct < minStopPct) reasons.push(`stop too tight — noise would grade it randomly`);
   if (stopDistancePct > 0.08) reasons.push("stop wider than 8% — not a tradeable setup");
 
   return { pass: reasons.length === 0, confidence, reasons };

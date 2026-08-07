@@ -79,8 +79,14 @@ export function generateSetup(
   openInterest?: number | null,
   takerRatio?: number | null,
   fearAndGreed?: number | null,
+  symbol?: string | null,
 ): Setup | null {
   if (candles.length < 120) return null;
+
+  const isGold = symbol === "XAUUSD" || symbol === "PAXGUSDT";
+  const isForex = symbol === "EURUSD" || symbol === "GBPUSD" || symbol === "EURUSDT" || symbol === "GBPUSDT";
+  const atrStopMult = isGold ? 2.2 : isForex ? 1.8 : 1.5;
+  const rangeStopMult = isGold ? 1.25 : isForex ? 1.0 : 0.75;
 
   const closes = candles.map((c) => c.close);
   const emaFast = emaSeries(closes, 20);
@@ -196,7 +202,7 @@ export function generateSetup(
     // Entry: pullback zone around EMA-20 (limit-style entry, not market)
     if (uptrend && r >= rsiMinUp && r <= rsiMaxUp) {
       const entry = roundTo(f + 0.25 * a);
-      const stopLoss = roundTo(entry - 1.5 * a);
+      const stopLoss = roundTo(entry - atrStopMult * a);
       const risk = entry - stopLoss;
       if (entry < candle.low - 2 * a) return null; // entry absurdly far below price
       return {
@@ -213,7 +219,7 @@ export function generateSetup(
     if (downtrend && r >= rsiMinDown && r <= rsiMaxDown) {
 
       const entry = roundTo(f - 0.25 * a);
-      const stopLoss = roundTo(entry + 1.5 * a);
+      const stopLoss = roundTo(entry + atrStopMult * a);
       const risk = stopLoss - entry;
       if (entry > candle.high + 2 * a) return null;
       return {
@@ -241,7 +247,7 @@ export function generateSetup(
 
     if (nearLow && r < 42) {
       const entry = roundTo(swingLow + 0.15 * box);
-      const stopLoss = roundTo(swingLow - 0.75 * a);
+      const stopLoss = roundTo(swingLow - rangeStopMult * a);
       const risk = entry - stopLoss;
       if (risk <= 0) return null;
       const tp1 = roundTo(entry + TP_R[0] * risk);
@@ -252,7 +258,7 @@ export function generateSetup(
     }
     if (nearHigh && r > 58) {
       const entry = roundTo(swingHigh - 0.15 * box);
-      const stopLoss = roundTo(swingHigh + 0.75 * a);
+      const stopLoss = roundTo(swingHigh + rangeStopMult * a);
       const risk = stopLoss - entry;
       if (risk <= 0) return null;
       const tp1 = roundTo(entry - TP_R[0] * risk);
@@ -270,7 +276,7 @@ export function generateSetup(
 
   if (sweptLow && candle.close > swingLow && r < 45) {
     const entry = roundTo(swingLow + 0.15 * box);
-    const stopLoss = roundTo(swingLow - 0.75 * a);
+    const stopLoss = roundTo(swingLow - rangeStopMult * a);
     const risk = entry - stopLoss;
     if (risk <= 0) return null;
     const tp1 = roundTo(entry + TP_R[0] * risk);
@@ -280,7 +286,7 @@ export function generateSetup(
   }
   if (sweptHigh && candle.close < swingHigh && r > 55) {
     const entry = roundTo(swingHigh - 0.15 * box);
-    const stopLoss = roundTo(swingHigh + 0.75 * a);
+    const stopLoss = roundTo(swingHigh + rangeStopMult * a);
     const risk = stopLoss - entry;
     if (risk <= 0) return null;
     const tp1 = roundTo(entry - TP_R[0] * risk);

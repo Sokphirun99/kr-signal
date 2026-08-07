@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scoreSetup } from "./gate";
+import { gateSetup, scoreSetup } from "./gate";
 import type { Setup } from "./strategy";
 
 function createMockSetup(overrides?: Partial<Setup['context']>): Setup {
@@ -73,5 +73,39 @@ describe("Gate Scoring", () => {
     const scoreNeutral = scoreSetup(rangeSetupNeutral);
 
     expect(scoreWithExtremeFear).toBe(scoreNeutral + 5);
+  });
+
+  it("vetoes Gold setups outside active London/NY sessions", () => {
+    const setup = createMockSetup();
+    // 03:00 UTC (Asian lull)
+    setup.setupAt = new Date("2026-08-07T03:00:00Z").getTime();
+    const result = gateSetup(setup, false, { symbol: "XAUUSD" });
+    expect(result.pass).toBe(false);
+    expect(result.reasons).toContain("gold-off-session");
+  });
+
+  it("passes Gold setups during active NY session", () => {
+    const setup = createMockSetup();
+    // 14:00 UTC (NY Session, Friday)
+    setup.setupAt = new Date("2026-08-07T14:00:00Z").getTime();
+    const result = gateSetup(setup, false, { symbol: "XAUUSD" });
+    expect(result.reasons).not.toContain("gold-off-session");
+  });
+
+  it("vetoes Forex setups outside active London/NY sessions", () => {
+    const setup = createMockSetup();
+    // 02:00 UTC (Asian lull)
+    setup.setupAt = new Date("2026-08-07T02:00:00Z").getTime();
+    const result = gateSetup(setup, false, { symbol: "EURUSD" });
+    expect(result.pass).toBe(false);
+    expect(result.reasons).toContain("forex-off-session");
+  });
+
+  it("passes Forex setups during active London session", () => {
+    const setup = createMockSetup();
+    // 09:00 UTC (London Session, Friday)
+    setup.setupAt = new Date("2026-08-07T09:00:00Z").getTime();
+    const result = gateSetup(setup, false, { symbol: "EURUSD" });
+    expect(result.reasons).not.toContain("forex-off-session");
   });
 });

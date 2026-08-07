@@ -160,6 +160,7 @@ export async function runPipelinePass(): Promise<PassReport> {
             openInterest,
             takerRatio,
             fearAndGreed,
+            instrument.symbol,
           );
 
           if (!setup) {
@@ -193,7 +194,7 @@ export async function runPipelinePass(): Promise<PassReport> {
                 )
                 .limit(1);
 
-              const gate = gateSetup(setup, existing.length > 0);
+              const gate = gateSetup(setup, existing.length > 0, { symbol: instrument.symbol });
               if (!gate.pass) {
                 const reasonText = gate.reasons.join("; ");
                 note = fundingNote ? `${reasonText}; ${fundingNote}` : reasonText;

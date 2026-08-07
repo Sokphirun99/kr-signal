@@ -41,7 +41,7 @@ interface ResultRow {
   profitFactor: number;
 }
 
-const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT"];
+const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "XAUUSD"];
 const WINDOW_SIZE = 300;
 
 function formatProfitFactor(pf: number): string {
@@ -106,7 +106,7 @@ async function runBacktest(): Promise<void> {
 
       for (let i = WINDOW_SIZE - 1; i < candles.length; i++) {
         const windowCandles = candles.slice(i - WINDOW_SIZE + 1, i + 1);
-        const setup = generateSetup(windowCandles, tf);
+        const setup = generateSetup(windowCandles, tf, null, null, null, null, inst.symbol);
         if (!setup) continue;
 
         setups++;
@@ -143,6 +143,7 @@ async function runBacktest(): Promise<void> {
         const gate = gateSetup(setup, isSameSideOpen, {
           ignoreVolume,
           ignoreOffHours,
+          symbol: inst.symbol,
         });
         if (!gate.pass) continue;
 
