@@ -99,12 +99,41 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
       { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
       { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 100, high: 116, low: 100, close: 115, volume: 10 }, // TP1
       { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 115, high: 126, low: 115, close: 125, volume: 10 }, // TP2
-      { openTime: new Date("2026-01-01T04:00:00Z").getTime(), open: 125, high: 140, low: 124, close: 138, volume: 10 }, // Push higher
+      { openTime: new Date("2026-01-01T04:00:00Z").getTime(), open: 125, high: 139, low: 124, close: 138, volume: 10 }, // Push higher (below TP3 of 140)
       { openTime: new Date("2026-01-01T05:00:00Z").getTime(), open: 138, high: 138, low: 110, close: 112, volume: 10 }, // Reversal breaching trail
     ];
 
     const verdict = verifySignal(signal, [...prefix, ...tape]);
     expect(verdict.status).toBe("tp2");
     expect(verdict.rMultiple).toBeGreaterThan(1.5);
+  });
+
+  it("5. Gap-through limit entry fill: candle opens below Buy entry price and fills", () => {
+    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115 });
+    const candles: Candle[] = [
+      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 95, high: 98, low: 93, close: 95, volume: 10 }, // Gapped open to 95 (below 100 entry), low 93 (above 90 SL)
+      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 95, high: 116, low: 95, close: 115, volume: 10 }, // TP1 hit (moves stop to BE)
+      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 114, high: 114, low: 98, close: 99, volume: 10 }, // Reversal to entry
+    ];
+
+    const verdict = verifySignal(signal, candles);
+    expect(verdict.entryFilled).toBe(true);
+    expect(verdict.status).toBe("be");
+  });
+
+  it("6. TP3 Reachability under chandelier mode: exits at TP3 with status 'tp3'", () => {
+    setTrailMode("chandelier");
+    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115, tp2: 125, tp3: 140 });
+    const candles: Candle[] = [
+      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
+      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 100, high: 116, low: 100, close: 115, volume: 10 }, // TP1
+      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 115, high: 126, low: 115, close: 125, volume: 10 }, // TP2
+      { openTime: new Date("2026-01-01T04:00:00Z").getTime(), open: 125, high: 142, low: 124, close: 141, volume: 10 }, // Touches & exceeds TP3 (140)
+    ];
+
+    const verdict = verifySignal(signal, candles);
+    expect(verdict.status).toBe("tp3");
+    expect(verdict.exitPrice).toBe(140);
+    expect(verdict.rMultiple).toBe(4.0);
   });
 });

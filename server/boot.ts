@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
@@ -14,13 +15,21 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 const handleScan = async (c: Context) => {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return c.json({ error: "CRON_SECRET not configured" }, 500);
   }
-  const authHeader = c.req.header("authorization");
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const authHeader = c.req.header("authorization") ?? "";
+  const expectedAuth = `Bearer ${cronSecret}`;
+  if (!safeCompare(authHeader, expectedAuth)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   try {
@@ -28,7 +37,7 @@ const handleScan = async (c: Context) => {
     return c.json({ ok: true, report });
   } catch (err) {
     console.error("/api/scan error:", err);
-    return c.json({ error: String(err) }, 500);
+    return c.json({ error: "Pipeline pass execution failed." }, 500);
   }
 };
 

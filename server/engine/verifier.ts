@@ -69,12 +69,13 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
   let lowestCloseSinceTP2 = Infinity;
 
   for (const c of tape) {
-    // 1. Entry fill
+    // 1. Entry fill: limit order fills if price reached or gapped past entry
     if (!filled) {
       if (c.openTime > signal.expiresAt.getTime()) {
         return { ...base, status: "expired", closedAt: new Date(signal.expiresAt) };
       }
-      if (!touched(c, signal.entry)) continue;
+      const entryHit = isBuy ? c.low <= signal.entry : c.high >= signal.entry;
+      if (!entryHit) continue;
       filled = true;
     }
 
@@ -135,20 +136,29 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
           stop = Math.min(stop, trail);
         }
       }
-    } else if (tp2Hit && TRAIL_MODE === "chandelier") {
-      highestCloseSinceTP2 = Math.max(highestCloseSinceTP2, c.close);
-      lowestCloseSinceTP2 = Math.min(lowestCloseSinceTP2, c.close);
-      const k = candleIndexMap.get(c.openTime) ?? -1;
-      const atrVal = (k >= 0 && atrs[k] !== null && atrs[k]! > 0) ? atrs[k]! : (risk / 1.5);
-      if (isBuy) {
-        const trail = highestCloseSinceTP2 - 2.5 * atrVal;
-        stop = Math.max(stop, trail);
-      } else {
-        const trail = lowestCloseSinceTP2 + 2.5 * atrVal;
-        stop = Math.min(stop, trail);
+    }
+
+    if (tp2Hit) {
+      const tp3Hit = isBuy ? c.high >= signal.tp3 : c.low <= signal.tp3;
+      if (tp3Hit) {
+        const gappedThrough = isBuy ? c.open > signal.tp3 : c.open < signal.tp3;
+        const exit = gappedThrough ? c.open : signal.tp3;
+        return closeIt("tp3", exit);
       }
-    } else if (tp2Hit && TRAIL_MODE === "fixed" && touched(c, signal.tp3)) {
-      return closeIt("tp3", signal.tp3);
+
+      if (TRAIL_MODE === "chandelier") {
+        highestCloseSinceTP2 = Math.max(highestCloseSinceTP2, c.close);
+        lowestCloseSinceTP2 = Math.min(lowestCloseSinceTP2, c.close);
+        const k = candleIndexMap.get(c.openTime) ?? -1;
+        const atrVal = (k >= 0 && atrs[k] !== null && atrs[k]! > 0) ? atrs[k]! : (risk / 1.5);
+        if (isBuy) {
+          const trail = highestCloseSinceTP2 - 2.5 * atrVal;
+          stop = Math.max(stop, trail);
+        } else {
+          const trail = lowestCloseSinceTP2 + 2.5 * atrVal;
+          stop = Math.min(stop, trail);
+        }
+      }
     }
 
     // 4. Post-entry expiry: if the signal never reaches any level in time,
