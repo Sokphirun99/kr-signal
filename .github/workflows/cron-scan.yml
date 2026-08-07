@@ -11,5 +11,5 @@ jobs:
     steps:
       - name: Trigger Signal Pipeline Scan
         run: |
-          curl -s -X POST https://kr-signal.vercel.app/api/scan \
+          curl -f -s -X POST https://kr-signal.vercel.app/api/cron/pipeline \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
