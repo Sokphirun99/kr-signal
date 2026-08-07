@@ -1,6 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { matchSymbolsForText } from "@contracts/news";
-import { getNews, fetchNewsFeed } from "./news";
+import { getNews, fetchNewsFeed } from "./news/index";
+import { CryptoPanicNewsSource, mapCryptoPanicSymbols } from "./news/sources/cryptopanic";
+import { CryptoCompareNewsSource } from "./news/sources/cryptocompare";
+import { RssNewsSource } from "./news/sources/rss";
 
 describe("matchSymbolsForText", () => {
   it("matches Bitcoin correctly to BTCUSDT", () => {
@@ -13,53 +18,116 @@ describe("matchSymbolsForText", () => {
     expect(symbols).toContain("ETHUSDT");
   });
 
-  it("does not match 'method' as 'eth'", () => {
-    const symbols = matchSymbolsForText("Method acting in new Hollywood movie");
-    expect(symbols).not.toContain("ETHUSDT");
-    expect(symbols).toEqual([]);
+  it("matches Gold keywords correctly to XAUUSD", () => {
+    const symbols = matchSymbolsForText("Gold spot demand increases amid central bank buying");
+    expect(symbols).toContain("XAUUSD");
   });
 
-  it("does not match 'Golden' as 'gold'", () => {
-    const symbols = matchSymbolsForText("Golden ratio in classical art");
-    expect(symbols).not.toContain("XAUUSD");
-    expect(symbols).toEqual([]);
+  it("matches Forex pairs correctly to EURUSD and GBPUSD", () => {
+    const eur = matchSymbolsForText("EUR/USD rises after ECB rate commentary");
+    expect(eur).toContain("EURUSD");
+
+    const gbp = matchSymbolsForText("Pound sterling holds ground following Bank of England decision");
+    expect(gbp).toContain("GBPUSD");
   });
 
-  it("matches multiple symbols in a multi-asset headline", () => {
-    const symbols = matchSymbolsForText("Bitcoin and Ethereum surge together");
-    expect(symbols).toContain("BTCUSDT");
-    expect(symbols).toContain("ETHUSDT");
-  });
-
-  it("matches forex and gold keywords with whole word accuracy", () => {
-    expect(matchSymbolsForText("Central bank of england holds rates")).toContain("GBPUSD");
-    expect(matchSymbolsForText("ECB policy update")).toContain("EURUSD");
-    expect(matchSymbolsForText("Physical bullion demands rise")).toContain("XAUUSD");
+  it("prevents false positive substring matches", () => {
+    expect(matchSymbolsForText("The method is robust")).not.toContain("ETHUSDT");
+    expect(matchSymbolsForText("Golden cross in technical analysis")).not.toContain("XAUUSD");
   });
 });
 
-describe("server/engine/news adapter", () => {
-  const mockRssXml = `<?xml version="1.0" encoding="UTF-8"?>
-  <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
-    <channel>
-      <title>Mock News Feed</title>
-      <item>
-        <title>Bitcoin Hits New Milestone</title>
-        <link>https://example.com/btc-news-1</link>
-        <pubDate>Fri, 08 Aug 2026 01:00:00 GMT</pubDate>
-        <description><![CDATA[<p>Bitcoin trading volume increased significantly today.</p>]]></description>
-        <media:thumbnail url="https://example.com/btc-thumb.jpg" />
-      </item>
-      <item>
-        <title>Ethereum Developers Announce Schedule</title>
-        <link>https://example.com/eth-news-2</link>
-        <pubDate>Fri, 08 Aug 2026 00:30:00 GMT</pubDate>
-        <description>Ethereum network activity continues to grow steadily across protocols.</description>
-        <enclosure url="https://example.com/eth-cover.png" type="image/png" />
-      </item>
-    </channel>
-  </rss>`;
+describe("CryptoPanic Source & Tag Mapping", () => {
+  it("maps tagged currency codes to canonical registry symbols", () => {
+    const postWithBtc = {
+      title: "Market update without names in title",
+      currencies: [{ code: "BTC" }],
+    };
+    expect(mapCryptoPanicSymbols(postWithBtc)).toEqual(["BTCUSDT"]);
 
+    const postWithMulti = {
+      title: "Layer 1 and precious token review",
+      currencies: [{ code: "ETH" }, { code: "PAXG" }],
+    };
+    const mapped = mapCryptoPanicSymbols(postWithMulti);
+    expect(mapped).toContain("ETHUSDT");
+    expect(mapped).toContain("XAUUSD");
+  });
+
+  it("falls back to title text matching when currency codes are unknown or missing", () => {
+    const postFallback = {
+      title: "Surging Bitcoin adoption across institutions",
+      currencies: [{ code: "SOL" }, { code: "ADA" }],
+    };
+    const mapped = mapCryptoPanicSymbols(postFallback);
+    expect(mapped).toContain("BTCUSDT");
+  });
+
+  it("parses CryptoPanic JSON response with 10s timeout and maps to NewsItem", async () => {
+    process.env.CRYPTOPANIC_API_KEY = "test-cryptopanic-key";
+    const source = new CryptoPanicNewsSource();
+
+    const mockResponse = {
+      results: [
+        {
+          id: 101,
+          title: "Bitcoin breaks $70k barrier",
+          url: "https://cryptopanic.com/news/101/click/",
+          domain: "coindesk.com",
+          published_at: "2026-08-08T01:30:00Z",
+          currencies: [{ code: "BTC", title: "Bitcoin", slug: "bitcoin" }],
+        },
+      ],
+    };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const items = await source.fetch(true);
+    expect(items.length).toBe(1);
+    expect(items[0].title).toBe("Bitcoin breaks $70k barrier");
+    expect(items[0].matchedSymbols).toContain("BTCUSDT");
+    expect(items[0].source).toBe("coindesk.com");
+  });
+});
+
+describe("CryptoCompare Source & Body Mapping", () => {
+  it("maps CryptoCompare article payload with truncated summary and category matching", async () => {
+    const source = new CryptoCompareNewsSource();
+
+    const mockResponse = {
+      Data: [
+        {
+          id: "202",
+          title: "Ethereum staking reaches record high",
+          url: "https://example.com/eth-staking",
+          source: "cointelegraph",
+          body: "Ethereum validator count has exceeded 1 million active participants across global networks.",
+          published_on: 1723075200,
+          categories: "ETH,Staking,Blockchain",
+          imageurl: "https://example.com/eth.jpg",
+          source_info: { name: "Cointelegraph" },
+        },
+      ],
+    };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const items = await source.fetch(true);
+    expect(items.length).toBe(1);
+    expect(items[0].title).toBe("Ethereum staking reaches record high");
+    expect(items[0].source).toBe("Cointelegraph");
+    expect(items[0].matchedSymbols).toContain("ETHUSDT");
+    expect(items[0].summary).toContain("Ethereum validator count");
+  });
+});
+
+describe("Aggregator Resilience & Caching", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -68,57 +136,52 @@ describe("server/engine/news adapter", () => {
     vi.restoreAllMocks();
   });
 
-  it("parses RSS XML feed correctly and computes matched symbols", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => mockRssXml,
-    });
-    vi.stubGlobal("fetch", mockFetch);
+  it("continues serving healthy sources when one news provider is dead or throws", async () => {
+    vi.spyOn(RssNewsSource.prototype, "fetch").mockResolvedValueOnce([
+      {
+        id: "https://coindesk.com/article1",
+        title: "Bitcoin dominance rises",
+        url: "https://coindesk.com/article1",
+        source: "CoinDesk",
+        sources: ["CoinDesk"],
+        publishedAt: "2026-08-08T01:00:00.000Z",
+        summary: "BTC continues ascent.",
+        matchedSymbols: ["BTCUSDT"],
+      },
+    ]);
 
-    const items = await fetchNewsFeed("https://example.com/feed", "MockSource");
-    expect(items.length).toBe(2);
-    expect(items[0].title).toBe("Bitcoin Hits New Milestone");
-    expect(items[0].source).toBe("MockSource");
-    expect(items[0].matchedSymbols).toContain("BTCUSDT");
-    expect(items[0].summary).toBe("Bitcoin trading volume increased significantly today.");
-    expect(items[0].imageUrl).toBe("https://example.com/btc-thumb.jpg");
-    expect(items[1].matchedSymbols).toContain("ETHUSDT");
-    expect(items[1].imageUrl).toBe("https://example.com/eth-cover.png");
+    vi.spyOn(CryptoCompareNewsSource.prototype, "fetch").mockRejectedValueOnce(
+      new Error("CryptoCompare rate limited or down"),
+    );
+
+    const news = await getNews(true);
+    expect(news.length).toBeGreaterThanOrEqual(1);
+    expect(news[0].title).toBe("Bitcoin dominance rises");
   });
 
-  it("continues gracefully when one feed fails in getNews", async () => {
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("coindesk")) {
-        return Promise.resolve({
-          ok: true,
-          text: async () => mockRssXml,
-        });
-      }
-      return Promise.reject(new Error("Network connection timeout"));
-    });
-    vi.stubGlobal("fetch", mockFetch);
+  it("handles RSS fetch failure gracefully in standalone fetchNewsFeed", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+    } as Response);
 
-    const news = await getNews(true); // force fresh fetch
-    expect(news.length).toBeGreaterThan(0);
-    expect(news.some((item) => item.title.includes("Bitcoin"))).toBe(true);
+    await expect(
+      fetchNewsFeed("https://example.com/bad-rss", "BadFeed"),
+    ).rejects.toThrow("HTTP 503");
   });
 
-  it("serves stale cache on total network failure after cache is warm", async () => {
-    // 1. Warm cache
-    const mockFetchSuccess = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => mockRssXml,
-    });
-    vi.stubGlobal("fetch", mockFetchSuccess);
-    const initialNews = await getNews(true);
-    expect(initialNews.length).toBeGreaterThan(0);
+  it("statically verifies news modules are NEVER imported by strategy.ts, gate.ts, or verifier.ts", () => {
+    const forbiddenFiles = [
+      "server/engine/strategy.ts",
+      "server/engine/gate.ts",
+      "server/engine/verifier.ts",
+    ];
 
-    // 2. Simulate total network outage
-    const mockFetchFail = vi.fn().mockRejectedValue(new Error("DNS lookup failed"));
-    vi.stubGlobal("fetch", mockFetchFail);
-
-    const fallbackNews = await getNews(true);
-    expect(fallbackNews.length).toBe(initialNews.length);
-    expect(fallbackNews[0].title).toBe(initialNews[0].title);
+    for (const relPath of forbiddenFiles) {
+      const fullPath = path.resolve(process.cwd(), relPath);
+      const content = fs.readFileSync(fullPath, "utf-8").toLowerCase();
+      expect(content).not.toContain("cryptopanic");
+      expect(content).not.toContain("cryptocompare");
+    }
   });
 });

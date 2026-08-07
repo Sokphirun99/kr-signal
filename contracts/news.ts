@@ -7,7 +7,10 @@ export interface NewsItem {
   id: string;
   title: string;
   url: string;
+  /** Primary source name or joined source label */
   source: string;
+  /** All sources where this headline was published/reported */
+  sources?: string[];
   /** ISO UTC timestamp, e.g. "2026-08-08T01:30:00.000Z" */
   publishedAt: string;
   summary: string | null;
