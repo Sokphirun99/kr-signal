@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createRouter, publicQuery } from "./middleware";
-import { ensureFresh } from "./engine/pipeline";
-import { listSignals, computeTrackRecord, computeFunnel } from "./queries/signals";
-import { fetchAllTickers, fetchClosedKlines } from "./engine/binance";
-import { generateSetup } from "./engine/strategy";
-import { gateSetup } from "./engine/gate";
-import { analyzeTechnicalData } from "./engine/analysis";
-import { INSTRUMENTS, TIMEFRAMES } from "@contracts/types";
-
+import { createRouter, publicQuery } from "../middleware";
+import { ensureFresh } from "../engine/pipeline";
+import { listSignals, computeTrackRecord, computeFunnel } from "../queries/signals";
+import { fetchAllTickers, fetchClosedKlines } from "../engine/binance";
+import { generateSetup } from "../engine/strategy";
+import { gateSetup } from "../engine/gate";
+import { analyzeTechnicalData } from "../engine/analysis";
+import { INSTRUMENTS, TIMEFRAMES } from "@contracts/instruments";
 
 export const signalsRouter = createRouter({
   /** Signal feed — triggers a throttled pipeline pass first */

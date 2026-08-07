@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/utils/supabase";
-import type { Signal } from "@db/schema";
+import type { ClientSignal, ClosedSignalRow } from "@contracts/instruments";
 import { INSTRUMENTS } from "@contracts/instruments";
 import { computeTrackRecordFromSignals } from "@contracts/trackRecord";
 
@@ -22,14 +22,23 @@ export interface SupabaseSignalFilters {
 }
 
 /**
- * Computes verified track record metrics from raw Supabase signal records.
- * Inputs: signals array (Signal or generic record).
+ * Maps raw Supabase snake_case rows into ClosedSignalRow and computes track record.
+ * Inputs: signals array from Supabase (snake_case or camelCase rows).
  * Outputs: Computed TrackRecord object.
  * Side effects: none.
  * Failure modes: returns zeroed metrics on empty input.
  */
-export function computeTrackFromSignals(signals: (Signal | Record<string, unknown>)[]) {
-  return computeTrackRecordFromSignals(signals);
+export function computeTrackFromSignals(signals: ClientSignal[]) {
+  const mapped: ClosedSignalRow[] = signals.map((s) => {
+    const raw = s as Record<string, unknown>;
+    return {
+      status: (raw.status ?? "open") as ClosedSignalRow["status"],
+      rMultiple: Number(raw.rMultiple ?? raw.r_multiple ?? 0),
+      market: String(raw.market ?? "crypto"),
+      closedAt: (raw.closedAt ?? raw.closed_at ?? null) as string | null,
+    };
+  });
+  return computeTrackRecordFromSignals(mapped);
 }
 
 function getJitteredPollDelay(): number {
@@ -43,7 +52,7 @@ function getJitteredPollDelay(): number {
  * Side effects: none.
  * Failure modes: returns "0:0" on empty list.
  */
-export function computeSignalFingerprint(signals: Signal[]): string {
+export function computeSignalFingerprint(signals: ClientSignal[]): string {
   if (signals.length === 0) return DEFAULT_FINGERPRINT;
   let maxId = 0;
   for (let i = 0; i < signals.length; i++) {
@@ -86,7 +95,7 @@ function buildSignalsQuery(filters?: SupabaseSignalFilters) {
  * Failure modes: catches network errors, logs to console, and retains current state.
  */
 export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
-  const [supabaseSignals, setSupabaseSignals] = useState<Signal[]>([]);
+  const [supabaseSignals, setSupabaseSignals] = useState<ClientSignal[]>([]);
   const isEnabled = filters?.enabled ?? true;
   const [isLoading, setIsLoading] = useState<boolean>(isEnabled);
   const inFlightRef = useRef<boolean>(false);
@@ -111,7 +120,7 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       try {
         const { data, error } = await buildSignalsQuery(filters);
         if (isMounted && data && !error) {
-          const nextSignals = data as unknown as Signal[];
+          const nextSignals = data as unknown as ClientSignal[];
           const nextFingerprint = computeSignalFingerprint(nextSignals);
           if (fingerprintRef.current !== nextFingerprint) {
             fingerprintRef.current = nextFingerprint;

@@ -1,5 +1,5 @@
 import { createRouter, publicQuery } from "./middleware";
-import { signalsRouter } from "./signalsRouter";
+import { signalsRouter } from "./routers/signalsRouter";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -7,5 +7,3 @@ export const appRouter = createRouter({
 });
 
 export type AppRouter = typeof appRouter;
-
-

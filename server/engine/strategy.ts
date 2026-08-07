@@ -21,12 +21,7 @@ import {
   rsiDivergence,
 } from "./indicators";
 import type { StrategyStyle, TradeSide, Timeframe } from "@contracts/instruments";
-
-export let SQUEEZE_BREAKOUT = false;
-
-export function setSqueezeBreakout(enabled: boolean): void {
-  SQUEEZE_BREAKOUT = enabled;
-}
+import { getEngineConfig } from "../config/engineConfig";
 
 export interface Setup {
   timeframe: Timeframe;
@@ -188,14 +183,15 @@ export function generateSetup(
     },
   };
 
+  const engineConfig = getEngineConfig();
   if (regime === "trending") {
     const uptrend = f > s && candle.close > f;
     const downtrend = f < s && candle.close < f;
 
-    const rsiMinUp = SQUEEZE_BREAKOUT && squeeze >= 20 ? 40 : 45;
-    const rsiMaxUp = SQUEEZE_BREAKOUT && squeeze >= 20 ? 75 : 70;
-    const rsiMinDown = SQUEEZE_BREAKOUT && squeeze >= 20 ? 25 : 30;
-    const rsiMaxDown = SQUEEZE_BREAKOUT && squeeze >= 20 ? 60 : 55;
+    const rsiMinUp = engineConfig.squeezeBreakout && squeeze >= 20 ? 40 : 45;
+    const rsiMaxUp = engineConfig.squeezeBreakout && squeeze >= 20 ? 75 : 70;
+    const rsiMinDown = engineConfig.squeezeBreakout && squeeze >= 20 ? 25 : 30;
+    const rsiMaxDown = engineConfig.squeezeBreakout && squeeze >= 20 ? 60 : 55;
 
     // Entry: pullback zone around EMA-20 (limit-style entry, not market)
     if (uptrend && r >= rsiMinUp && r <= rsiMaxUp) {
@@ -239,7 +235,7 @@ export function generateSetup(
   const box = swingHigh - swingLow;
   if (box < 2.5 * a) return null; // box too tight to fade safely
 
-  if (RANGE_MODE === "touch") {
+  if (engineConfig.rangeMode === "touch") {
     const nearLow = candle.close <= swingLow + 0.25 * box;
     const nearHigh = candle.close >= swingHigh - 0.25 * box;
 
@@ -294,12 +290,6 @@ export function generateSetup(
   }
 
   return null;
-}
-
-export let RANGE_MODE: "sweep" | "touch" = "sweep";
-
-export function setRangeMode(mode: "sweep" | "touch"): void {
-  RANGE_MODE = mode;
 }
 
 export const HTF_MAP: Record<Timeframe, Timeframe | null> = {

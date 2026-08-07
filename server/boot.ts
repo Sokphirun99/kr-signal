@@ -1,45 +1,17 @@
-import { timingSafeEqual } from "node:crypto";
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
-
-import { forceRunPipelinePass } from "./engine/pipeline";
+import { handleCronPipeline } from "./routes/cron";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
-
-function safeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-const handleCronPipeline = async (c: Context) => {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return c.json({ error: "CRON_SECRET not configured" }, 500);
-  }
-  const authHeader = c.req.header("authorization") ?? "";
-  const expectedAuth = `Bearer ${cronSecret}`;
-  if (!safeCompare(authHeader, expectedAuth)) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  try {
-    const report = await forceRunPipelinePass();
-    return c.json(report);
-  } catch (err) {
-    console.error("/api/cron/pipeline error:", err);
-    return c.json({ error: "Pipeline pass execution failed." }, 500);
-  }
-};
 
 app.get("/api/cron/pipeline", handleCronPipeline);
 app.post("/api/cron/pipeline", handleCronPipeline);

@@ -17,9 +17,10 @@ import {
 } from "@contracts/instruments";
 import type { Signal } from "@db/schema";
 import { fetchClosedKlines, type Candle } from "../server/engine/binance";
-import { generateSetup, HTF_MAP, isHtfVetoed, setRangeMode, setSqueezeBreakout } from "../server/engine/strategy";
+import { generateSetup, HTF_MAP, isHtfVetoed } from "../server/engine/strategy";
 import { gateSetup } from "../server/engine/gate";
-import { verifySignal, setTrailMode, type Verdict } from "../server/engine/verifier";
+import { verifySignal, type Verdict } from "../server/engine/verifier";
+import { setEngineConfig } from "../server/config/engineConfig";
 
 interface TradeRecord {
   setupIndex: number;
@@ -62,23 +63,15 @@ async function runBacktest(): Promise<void> {
   const variant = process.env.RULE_VARIANT || "chandelier";
   console.log(`\n=== KR-Signal Backtest Engine [Variant: ${variant}] ===\n`);
 
-  if (variant === "touch" || variant === "baseline") {
-    setRangeMode("touch");
-  } else {
-    setRangeMode("sweep");
-  }
+  const rangeMode = variant === "touch" || variant === "baseline" ? "touch" : "sweep";
+  const squeezeBreakout = variant === "squeeze" || variant === "chandelier";
+  const trailMode = variant === "fixed" || variant === "baseline" ? "fixed" : "chandelier";
 
-  if (variant === "squeeze" || variant === "chandelier") {
-    setSqueezeBreakout(true);
-  } else {
-    setSqueezeBreakout(false);
-  }
-
-  if (variant === "fixed" || variant === "baseline") {
-    setTrailMode("fixed");
-  } else {
-    setTrailMode("chandelier");
-  }
+  setEngineConfig({
+    rangeMode,
+    squeezeBreakout,
+    trailMode,
+  });
 
 
 

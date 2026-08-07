@@ -3,8 +3,7 @@ import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
 import DataSourceBadge from "@/components/DataSourceBadge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/providers/trpc";
-import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
+import { useSignals } from "@/lib/data/signalSource";
 import { INSTRUMENTS, type Market } from "@contracts/instruments";
 import { cn } from "@/lib/utils";
 
@@ -57,43 +56,25 @@ export default function Signals() {
   const [symbol, setSymbol] = useState<string | undefined>();
   const [tab, setTab] = useState<"open" | "history">("open");
 
-  const query = trpc.signals.list.useQuery(
-    {
-      symbol,
-      status: tab === "open" ? "open" : undefined,
-      historyOnly: tab === "history" ? true : undefined,
-      limit: 100,
-    },
-    {
-      refetchInterval: 30_000,
-      retry: 2,
-    },
-  );
-
-  const isFallbackNeeded = Boolean(query.isError || (!query.isLoading && (!query.data || query.data.length === 0)));
-  const { supabaseSignals } = useSupabaseSignals({
-    enabled: isFallbackNeeded,
+  const { signals, isLoading, source } = useSignals({
     symbol,
     status: tab === "open" ? "open" : undefined,
-    historyOnly: tab === "history",
+    historyOnly: tab === "history" ? true : undefined,
     limit: 100,
   });
 
-  const isSnapshotMode = isFallbackNeeded && supabaseSignals.length > 0;
-  const rawSignals = query.data && query.data.length > 0 ? query.data : supabaseSignals;
-
   const displaySignals = useMemo(() => {
-    if (!rawSignals) return [];
-    if (marketCategory === "all") return rawSignals;
-    return rawSignals.filter((s) => s.market === marketCategory);
-  }, [rawSignals, marketCategory]);
+    if (marketCategory === "all") return signals;
+    return signals.filter((s) => s.market === marketCategory);
+  }, [signals, marketCategory]);
 
   const symbolOptions = useMemo(() => {
     if (marketCategory === "all") return INSTRUMENTS;
     return INSTRUMENTS.filter((i) => i.market === marketCategory);
   }, [marketCategory]);
 
-  const isLoadingSignals = query.isLoading && supabaseSignals.length === 0;
+  const badgeMode = source === "snapshot" ? "snapshot" : "live";
+  const isSnapshotMode = source === "snapshot";
 
   return (
     <Layout>
@@ -109,7 +90,7 @@ export default function Signals() {
             </p>
           </div>
           <DataSourceBadge
-            mode={isSnapshotMode ? "snapshot" : "live"}
+            mode={badgeMode}
             liveLabel="Live Feed · Auto-Refreshing"
             snapshotLabel="Snapshot mode · retrying"
           />
@@ -186,7 +167,7 @@ export default function Signals() {
               Live connection interrupted — showing a snapshot. Retrying automatically.
             </p>
           )}
-          {isLoadingSignals ? (
+          {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => <SignalCardSkeleton key={i} />)
           ) : displaySignals && displaySignals.length > 0 ? (
             displaySignals.map((signal) => (

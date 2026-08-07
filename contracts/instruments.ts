@@ -124,3 +124,48 @@ export function parseUtcDate(input: unknown): Date {
   const d = new Date(String(input));
   return isNaN(d.getTime()) ? new Date() : d;
 }
+
+/**
+ * Minimal row shape accepted by the track-record pure function.
+ * Each data source (server Drizzle, client Supabase) maps ITS own rows
+ * into this canonical camelCase shape before calling computeTrackRecordFromSignals.
+ * Inputs: N/A (type definition).
+ * Outputs: N/A (type definition).
+ * Side effects: none.
+ * Failure modes: none.
+ */
+export interface ClosedSignalRow {
+  status: SignalStatus;
+  rMultiple: number;
+  market: string;
+  closedAt: Date | string | null;
+}
+
+/**
+ * Client-side signal shape matching the Drizzle Signal type.
+ * Defined in contracts/ so both server and client can reference it
+ * without either depending on the Drizzle-generated db/ type.
+ */
+export interface ClientSignal {
+  id: number;
+  symbol: string;
+  market: string;
+  timeframe: string;
+  style: string;
+  side: string;
+  entry: number;
+  stopLoss: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  confidence: number;
+  status: string;
+  engine: string;
+  entryFilled: boolean;
+  rMultiple: number | null;
+  exitPrice: number | null;
+  setupAt: Date | string;
+  openedAt: Date | string;
+  expiresAt: Date | string;
+  closedAt: Date | string | null;
+}

@@ -1,5 +1,10 @@
-import type { Signal } from "@db/schema";
-import { CLOSED_STATUSES, WIN_STATUSES, parseUtcDate, type SignalStatus } from "./instruments";
+import {
+  CLOSED_STATUSES,
+  WIN_STATUSES,
+  parseUtcDate,
+  type SignalStatus,
+  type ClosedSignalRow,
+} from "./instruments";
 
 export interface EquityCurvePoint {
   date: string;
@@ -29,9 +34,14 @@ export interface TrackRecord {
 /**
  * Pure track-record computation shared between backend DB query and frontend fallback.
  * Ensures consistent stats, formulas, streaks, and equity curves across all data layers.
+ * Inputs: rows — array of pre-mapped ClosedSignalRow in canonical camelCase;
+ *         countsOverride — optional pre-counted undecidable/expired tallies.
+ * Outputs: aggregate TrackRecord metrics.
+ * Side effects: none (pure function).
+ * Failure modes: returns zeroed metrics when input is empty.
  */
 export function computeTrackRecordFromSignals(
-  allSignals: (Signal | Record<string, unknown>)[],
+  rows: ClosedSignalRow[],
   countsOverride?: { undecidable?: number; expired?: number },
 ): TrackRecord {
   const closedSignals: {
@@ -44,25 +54,18 @@ export function computeTrackRecordFromSignals(
   let undecidableCount = countsOverride?.undecidable ?? 0;
   let expiredCount = countsOverride?.expired ?? 0;
 
-  for (const rawSignal of allSignals) {
-    const s = rawSignal as Record<string, unknown>;
-    const status = String(s.status ?? "") as SignalStatus;
-    const rMultiple = Number(s.rMultiple ?? s.r_multiple ?? 0);
-    const market = String(s.market ?? "crypto");
-    const closedAtRaw = s.closedAt ?? s.closed_at;
-    const closedAt = closedAtRaw ? parseUtcDate(closedAtRaw) : null;
-
+  for (const row of rows) {
     if (countsOverride === undefined) {
-      if (status === "undecidable") undecidableCount++;
-      if (status === "expired") expiredCount++;
+      if (row.status === "undecidable") undecidableCount++;
+      if (row.status === "expired") expiredCount++;
     }
 
-    if (CLOSED_STATUSES.includes(status)) {
+    if (CLOSED_STATUSES.includes(row.status)) {
       closedSignals.push({
-        status,
-        rMultiple,
-        market,
-        closedAt,
+        status: row.status,
+        rMultiple: row.rMultiple,
+        market: row.market,
+        closedAt: row.closedAt ? parseUtcDate(row.closedAt) : null,
       });
     }
   }

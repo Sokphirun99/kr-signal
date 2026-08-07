@@ -8,6 +8,7 @@ import { and, desc, eq, ne, inArray, gte, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
   INSTRUMENTS,
+  type ClosedSignalRow,
   type SignalStatus,
 } from "@contracts/instruments";
 
@@ -54,7 +55,14 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
     .from(signals)
     .where(and(inArray(signals.symbol, VALID_SYMBOLS), eq(signals.status, "expired")));
 
-  return computeTrackRecordFromSignals(validSignals, {
+  const closedRows: ClosedSignalRow[] = validSignals.map((s) => ({
+    status: s.status as SignalStatus,
+    rMultiple: Number(s.rMultiple ?? 0),
+    market: s.market,
+    closedAt: s.closedAt,
+  }));
+
+  return computeTrackRecordFromSignals(closedRows, {
     undecidable: Number(undecidableRows[0]?.n ?? 0),
     expired: Number(expiredRows[0]?.n ?? 0),
   });

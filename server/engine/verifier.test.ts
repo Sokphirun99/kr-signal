@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { verifySignal, setTrailMode } from "./verifier";
+import { verifySignal } from "./verifier";
+import { setEngineConfig } from "../config/engineConfig";
 import type { Signal } from "@db/schema";
 import type { Candle } from "./binance";
 
@@ -33,7 +34,7 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
 
 describe("verifySignal honesty rules & chandelier trailing stop", () => {
   beforeEach(() => {
-    setTrailMode("chandelier");
+    setEngineConfig({ trailMode: "chandelier" });
   });
 
   it("1. Normal Stop-Loss breach: exits at stop level with status 'sl'", () => {
@@ -78,7 +79,7 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   });
 
   it("4. Chandelier Trail Breach after TP2: ratchets stop and closes with status 'tp2'", () => {
-    setTrailMode("chandelier");
+    setEngineConfig({ trailMode: "chandelier" });
     const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115, tp2: 125 });
 
     // Generate 15 candles before setup to initialize ATR series cleanly
@@ -122,7 +123,7 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   });
 
   it("6. TP3 Reachability under chandelier mode: exits at TP3 with status 'tp3'", () => {
-    setTrailMode("chandelier");
+    setEngineConfig({ trailMode: "chandelier" });
     const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115, tp2: 125, tp3: 140 });
     const candles: Candle[] = [
       { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },

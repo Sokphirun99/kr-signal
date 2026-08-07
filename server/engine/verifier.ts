@@ -14,12 +14,7 @@
 import type { Candle } from "./binance";
 import type { Signal } from "@db/schema";
 import { atrSeries } from "./indicators";
-
-export let TRAIL_MODE: "fixed" | "chandelier" = "chandelier";
-
-export function setTrailMode(mode: "fixed" | "chandelier"): void {
-  TRAIL_MODE = mode;
-}
+import { getEngineConfig } from "../config/engineConfig";
 
 export interface Verdict {
   status: "open" | "tp1" | "tp2" | "tp3" | "sl" | "be" | "expired" | "undecidable";
@@ -68,6 +63,7 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
   let highestCloseSinceTP2 = -Infinity;
   let lowestCloseSinceTP2 = Infinity;
 
+  const { trailMode } = getEngineConfig();
   for (const c of tape) {
     // 1. Entry fill: limit order fills if price reached or gapped past entry
     if (!filled) {
@@ -105,7 +101,7 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
     if (isBuy ? c.low <= stop : c.high >= stop) {
       const gappedThrough = isBuy ? c.open < stop : c.open > stop;
       const exit = gappedThrough ? c.open : stop;
-      const status: Verdict["status"] = tp2Hit && TRAIL_MODE === "chandelier"
+      const status: Verdict["status"] = tp2Hit && trailMode === "chandelier"
         ? "tp2"
         : tp1Hit
         ? (isBuy ? exit >= signal.entry : exit <= signal.entry)
@@ -123,7 +119,7 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
 
     if (tp1Hit && !tp2Hit && touched(c, signal.tp2)) {
       tp2Hit = true;
-      if (TRAIL_MODE === "chandelier") {
+      if (trailMode === "chandelier") {
         highestCloseSinceTP2 = c.close;
         lowestCloseSinceTP2 = c.close;
         const k = candleIndexMap.get(c.openTime) ?? -1;
@@ -146,7 +142,7 @@ export function verifySignal(signal: Signal, candles: Candle[]): Verdict {
         return closeIt("tp3", exit);
       }
 
-      if (TRAIL_MODE === "chandelier") {
+      if (trailMode === "chandelier") {
         highestCloseSinceTP2 = Math.max(highestCloseSinceTP2, c.close);
         lowestCloseSinceTP2 = Math.min(lowestCloseSinceTP2, c.close);
         const k = candleIndexMap.get(c.openTime) ?? -1;
