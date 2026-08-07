@@ -55,10 +55,10 @@ export const signals = pgTable(
     rMultiple: doublePrecision("r_multiple"),
     exitPrice: doublePrecision("exit_price"),
 
-    setupAt: timestamp("setup_at", { mode: "date" }).notNull(),
-    openedAt: timestamp("opened_at", { mode: "date" }).notNull().defaultNow(),
-    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
-    closedAt: timestamp("closed_at", { mode: "date" }),
+    setupAt: timestamp("setup_at", { mode: "date", withTimezone: true }).notNull(),
+    openedAt: timestamp("opened_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    closedAt: timestamp("closed_at", { mode: "date", withTimezone: true }),
   },
   (t) => [
     uniqueIndex("signal_dedupe").on(t.symbol, t.timeframe, t.style, t.setupAt),
@@ -75,7 +75,7 @@ export const scanRuns = pgTable(
   "scan_runs",
   {
     id: serial("id").primaryKey(),
-    ranAt: timestamp("ran_at", { mode: "date" }).notNull().defaultNow(),
+    ranAt: timestamp("ran_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
     symbol: varchar("symbol", { length: 20 }).notNull(),
     timeframe: timeframeEnum("timeframe").notNull(),
     candidates: integer("candidates").notNull().default(0),

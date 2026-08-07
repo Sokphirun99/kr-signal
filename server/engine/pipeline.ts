@@ -121,7 +121,17 @@ export async function runPipeline(): Promise<PipelineReport> {
 
   for (const sig of openSignals) {
     const instrument = INSTRUMENTS.find((i) => i.symbol === sig.symbol);
-    if (!instrument) continue;
+    if (!instrument) {
+      await getDb()
+        .update(signals)
+        .set({
+          status: "undecidable",
+          closedAt: new Date(),
+        })
+        .where(eq(signals.id, sig.id));
+      report.closed++;
+      continue;
+    }
     try {
       const candles = await activeKlinesFor(instrument.pair, sig.timeframe);
       const verdict = verifySignal(sig, candles);

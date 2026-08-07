@@ -101,3 +101,26 @@ export function formatPrice(price: number, decimals: number): string {
     maximumFractionDigits: decimals,
   });
 }
+
+/**
+ * Safely parses any Date input or ISO string without an explicit offset
+ * strictly as a UTC timestamp. Prevents browser local timezone shifting.
+ */
+export function parseUtcDate(input: unknown): Date {
+  if (!input) return new Date();
+  if (input instanceof Date) return input;
+  if (typeof input === "string") {
+    let str = input.trim();
+    if (!str) return new Date();
+    if (str.includes(" ") && !str.includes("T")) {
+      str = str.replace(" ", "T");
+    }
+    if (!str.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(str)) {
+      str += "Z";
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  const d = new Date(String(input));
+  return isNaN(d.getTime()) ? new Date() : d;
+}
