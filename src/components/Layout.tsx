@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Activity, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import GlowThreadsBackground from "@/components/GlowThreadsBackground";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -15,9 +16,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#070a08] text-zinc-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="relative min-h-screen bg-[#070a08] text-zinc-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden">
+      {/* WebGL Glow Threads Background */}
+      <GlowThreadsBackground
+        colors={["#e86bd8", "#f5f0fa", "#8b5bd6"]}
+        background="#070a08"
+        speed={1.0}
+        count={9}
+      />
+
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070a08]/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070a08]/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-xs">
@@ -88,10 +97,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-6xl px-4 pb-20">{children}</main>
+      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-20">{children}</main>
 
       {/* Expanded Multi-Column Footer */}
-      <footer className="border-t border-white/10 bg-[#050706] py-12">
+      <footer className="relative z-10 border-t border-white/10 bg-[#050706]/80 backdrop-blur-md py-12">
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {/* Col 1: Brand */}
