@@ -16,7 +16,7 @@ import {
   EXPIRY_MS,
   type Timeframe,
 } from "@contracts/instruments";
-import { fetchClosedKlines } from "./binance";
+import { fetchClosedKlines, fetchActiveKlines } from "./binance";
 import { generateSetup, HTF_MAP, isHtfVetoed } from "./strategy";
 import { gateSetup } from "./gate";
 import { verifySignal } from "./verifier";
@@ -32,12 +32,15 @@ let lastPass = 0;
 let running = false;
 
 export interface PassReport {
+  scannedAt?: Date;
   verified: number;
   closed: number;
   candidates: number;
   published: number;
   errors: string[];
 }
+
+export type PipelineReport = PassReport & { scannedAt: Date };
 
 export async function ensureFresh(): Promise<void> {
   if (running || Date.now() - lastPass < SCAN_INTERVAL_MS) return;
@@ -60,13 +63,20 @@ export async function ensureFresh(): Promise<void> {
   return forceRunPipelinePass().then(() => undefined);
 }
 
-export async function forceRunPipelinePass(): Promise<PassReport> {
+export async function forceRunPipelinePass(): Promise<PipelineReport> {
   if (running) {
-    return { verified: 0, closed: 0, candidates: 0, published: 0, errors: ["Pipeline pass already running"] };
+    return { 
+      scannedAt: new Date(),
+      verified: 0, 
+      closed: 0, 
+      candidates: 0, 
+      published: 0, 
+      errors: ["Pipeline pass already running"] 
+    };
   }
   running = true;
   try {
-    const report = await runPipelinePass();
+    const report = await runPipeline();
     lastPass = Date.now();
     return report;
   } finally {
@@ -74,31 +84,46 @@ export async function forceRunPipelinePass(): Promise<PassReport> {
   }
 }
 
+export async function runPipeline(): Promise<PipelineReport> {
+  const report: PipelineReport = {
+    scannedAt: new Date(),
+    verified: 0,
+    closed: 0,
+    candidates: 0,
+    published: 0,
+    errors: [],
+  };
 
-export async function runPipelinePass(): Promise<PassReport> {
-  const report: PassReport = { verified: 0, closed: 0, candidates: 0, published: 0, errors: [] };
-
-  // ---- Stage 1: verify open signals against fresh tape --------------------
+  // ---- Stage 1: verify open signals against fresh real-time tape -------------
   const openSignals = await getDb()
     .select()
     .from(signals)
     .where(eq(signals.status, "open"));
 
-  const candlesByPairTf = new Map<string, Awaited<ReturnType<typeof fetchClosedKlines>>>();
+  const activeCandlesByPairTf = new Map<string, Awaited<ReturnType<typeof fetchActiveKlines>>>();
+  const closedCandlesByPairTf = new Map<string, Awaited<ReturnType<typeof fetchClosedKlines>>>();
+
+  async function activeKlinesFor(pair: string, tf: Timeframe) {
+    const key = `${pair}:${tf}`;
+    if (!activeCandlesByPairTf.has(key)) {
+      activeCandlesByPairTf.set(key, await fetchActiveKlines(pair, tf, 300));
+    }
+    return activeCandlesByPairTf.get(key)!;
+  }
 
   async function klinesFor(pair: string, tf: Timeframe) {
     const key = `${pair}:${tf}`;
-    if (!candlesByPairTf.has(key)) {
-      candlesByPairTf.set(key, await fetchClosedKlines(pair, tf, 300));
+    if (!closedCandlesByPairTf.has(key)) {
+      closedCandlesByPairTf.set(key, await fetchClosedKlines(pair, tf, 300));
     }
-    return candlesByPairTf.get(key)!;
+    return closedCandlesByPairTf.get(key)!;
   }
 
   for (const sig of openSignals) {
     const instrument = INSTRUMENTS.find((i) => i.symbol === sig.symbol);
     if (!instrument) continue;
     try {
-      const candles = await klinesFor(instrument.pair, sig.timeframe);
+      const candles = await activeKlinesFor(instrument.pair, sig.timeframe);
       const verdict = verifySignal(sig, candles);
       report.verified++;
       if (verdict.status !== "open" || verdict.entryFilled !== sig.entryFilled) {

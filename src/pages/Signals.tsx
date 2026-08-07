@@ -64,7 +64,7 @@ export default function Signals() {
       limit: 100,
     },
     {
-      refetchInterval: 60_000,
+      refetchInterval: 5_000,
     },
   );
 

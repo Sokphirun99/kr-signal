@@ -100,20 +100,26 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
   undecidable: { label: "Undecidable", cls: "bg-purple-500/15 text-purple-400 border border-purple-500/20" },
 };
 
-function formatUtcTime(dateInput: Date | string): string {
+function formatDisplayTime(dateInput: Date | string): string {
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return "";
-  return (
-    d.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "UTC",
-    }) + " UTC"
-  );
+  const dateStr = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const localTime = d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const utcTime = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  });
+  return `${dateStr}, ${localTime} (${utcTime} UTC)`;
 }
 
 function Level({ label, value, decimals }: { label: string; value: number; decimals: number }) {
@@ -383,8 +389,8 @@ export default function SignalCard({ signal: rawSignal }: { signal: Signal | Rec
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-xs text-zinc-400">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            Opened {formatUtcTime(signal.openedAt)}
-            {signal.closedAt && ` · Closed ${formatUtcTime(signal.closedAt)}`}
+            Opened {formatDisplayTime(signal.openedAt)}
+            {signal.closedAt && ` · Closed ${formatDisplayTime(signal.closedAt)}`}
           </span>
 
           {signal.status === "open" &&

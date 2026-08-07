@@ -98,6 +98,23 @@ export async function fetchClosedKlines(
   return closed;
 }
 
+/** Klines including the still-forming active candle for real-time verification */
+export async function fetchActiveKlines(
+  pair: string,
+  interval: "15m" | "1h" | "4h",
+  limit = 300,
+): Promise<Candle[]> {
+  const cacheKey = `active:${pair}:${interval}:${limit}`;
+  const cached = klineCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < 5_000) {
+    return cached.candles;
+  }
+
+  const candles = await fetchKlines(pair, interval, limit);
+  klineCache.set(cacheKey, { candles, fetchedAt: Date.now() });
+  return candles;
+}
+
 export async function fetchTicker24h(pair: string): Promise<Ticker24h> {
   const raw = await fetchJson<Record<string, string>>(
     `/api/v3/ticker/24hr?symbol=${pair}`,
