@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { formatPrice } from "@contracts/instruments";
-import type { ClientSignal } from "@contracts/instruments";
+import { formatPrice, type Timeframe, type ClientSignal } from "@contracts/instruments";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/providers/trpc";
@@ -41,7 +40,7 @@ function AnalysisMetric({ label, value, detail }: AnalysisMetricProps) {
 
 interface SignalTechnicalAnalysisProps {
   symbol: string;
-  timeframe: ClientSignal["timeframe"];
+  timeframe: Timeframe;
   decimals: number;
   entry: number;
 }
@@ -237,7 +236,7 @@ export function SignalLevels({ signal, decimals }: SignalLevelsProps) {
 
       <SignalTechnicalAnalysis
         symbol={signal.symbol}
-        timeframe={signal.timeframe}
+        timeframe={signal.timeframe as Timeframe}
         decimals={decimals}
         entry={signal.entry}
       />

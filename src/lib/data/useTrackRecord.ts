@@ -1,18 +1,17 @@
 import { useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
+import type { TrackRecord } from "@contracts/trackRecord";
+export type { TrackRecord } from "@contracts/trackRecord";
 
 export type TrackRecordSource = "live" | "snapshot" | "loading";
 
-/** Shape returned by the tRPC track record query or computed from Supabase signals. */
-export type TrackRecord = NonNullable<
-  ReturnType<typeof trpc.signals.trackRecord.useQuery>["data"]
->;
-
-/** Shape returned by the tRPC funnel query. */
-export type FunnelData = NonNullable<
-  ReturnType<typeof trpc.signals.funnel.useQuery>["data"]
->;
+export interface FunnelData {
+  scans: number;
+  candidates: number;
+  published: number;
+  since?: Date | string | null;
+}
 
 export interface UseTrackRecordResult {
   trackRecord: TrackRecord | undefined;

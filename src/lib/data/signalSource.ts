@@ -2,13 +2,14 @@ import { useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 import type { SupabaseSignalFilters } from "@/hooks/useSupabaseSignals";
-import type { ClientSignal } from "@contracts/instruments";
+import type { ClientSignal, SignalStatus } from "@contracts/instruments";
 
 export type SignalSource = "live" | "snapshot" | "loading";
 
 export interface SignalFilters {
   symbol?: string;
-  status?: string;
+  status?: SignalStatus | string;
+  closedOnly?: boolean;
   historyOnly?: boolean;
   limit?: number;
 }
@@ -31,7 +32,7 @@ export function useSignals(filters?: SignalFilters): UseSignalsResult {
   const trpcQuery = trpc.signals.list.useQuery(
     {
       symbol: filters?.symbol,
-      status: filters?.status,
+      status: (filters?.status as SignalStatus | undefined) ?? null,
       historyOnly: filters?.historyOnly,
       limit: filters?.limit ?? 100,
     },

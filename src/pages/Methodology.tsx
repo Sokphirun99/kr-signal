@@ -136,6 +136,54 @@ export default function Methodology() {
               ))}
             </article>
           ))}
+
+          {/* Developers & Public API Section */}
+          <article className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-6 shadow-xs">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-white">Developers & Public REST API</h2>
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-mono font-medium text-emerald-400">
+                v1 REST API
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+              External trading systems, quantitative researchers, and charting tools can consume our immutable signal ledgers, historical track records, and covered instrument definitions directly via our high-performance read-only REST API.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs font-mono">
+              <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                <span className="text-zinc-500">Endpoints:</span>
+                <p className="mt-1 text-emerald-300">/api/v1/signals</p>
+                <p className="text-emerald-300">/api/v1/signals/:id</p>
+                <p className="text-emerald-300">/api/v1/track-record</p>
+                <p className="text-emerald-300">/api/v1/instruments</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                <span className="text-zinc-500">Rate Limiting & Authentication:</span>
+                <p className="mt-1 text-zinc-300">Auth: <code className="text-emerald-300">x-api-key</code> header</p>
+                <p className="text-zinc-300">Limit: 60 req/min per key (sliding window)</p>
+                <p className="text-zinc-300">Safety: Pure DB reads (no pipeline writes)</p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs">
+              <p className="text-zinc-400">
+                Need an API key? Request access by contacting our team at{" "}
+                <a
+                  href="mailto:api@kr-signal.internal"
+                  className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                >
+                  api@kr-signal.internal
+                </a>{" "}
+                with your use case.
+              </p>
+              <a
+                href="/api/v1/openapi.yaml"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+              >
+                View OpenAPI Spec (openapi.yaml) &rarr;
+              </a>
+            </div>
+          </article>
         </div>
       </section>
     </Layout>

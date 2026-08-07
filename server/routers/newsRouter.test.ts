@@ -34,16 +34,18 @@ describe("newsRouter", () => {
     },
   ];
 
+  const mockContext = { req: {} as Request, resHeaders: new Headers() };
+
   it("returns all news on general feed without filters", async () => {
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
-    const caller = appRouter.createCaller({} as unknown as Record<string, unknown>);
+    const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({});
     expect(result.length).toBe(3);
   });
 
   it("filters by specific symbol", async () => {
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
-    const caller = appRouter.createCaller({} as unknown as Record<string, unknown>);
+    const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({ symbol: "BTCUSDT" });
     expect(result.length).toBe(1);
     expect(result[0].matchedSymbols).toContain("BTCUSDT");
@@ -51,7 +53,7 @@ describe("newsRouter", () => {
 
   it("filters by market category", async () => {
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
-    const caller = appRouter.createCaller({} as unknown as Record<string, unknown>);
+    const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({ market: "gold" });
     expect(result.length).toBe(1);
     expect(result[0].matchedSymbols).toContain("XAUUSD");

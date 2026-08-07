@@ -3,7 +3,7 @@
  */
 
 import { getDb } from "./connection";
-import { signals, scanRuns } from "@db/schema";
+import { signals, scanRuns, type Signal } from "@db/schema";
 import { and, desc, eq, ne, inArray, gte, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
@@ -33,6 +33,22 @@ export async function listSignals(filters?: {
     .where(and(...conditions))
     .orderBy(desc(signals.openedAt))
     .limit(filters?.limit ?? 100);
+}
+
+/**
+ * Fetches a single signal by its numerical ID, validating symbol is covered.
+ * Inputs: id - integer signal ID.
+ * Outputs: Signal record or null if not found.
+ * Side effects: none.
+ * Failure modes: returns null when ID doesn't exist or is not a covered instrument.
+ */
+export async function getSignalById(id: number): Promise<Signal | null> {
+  const rows = await getDb()
+    .select()
+    .from(signals)
+    .where(and(eq(signals.id, id), inArray(signals.symbol, VALID_SYMBOLS)))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 import { computeTrackRecordFromSignals, type TrackRecord } from "@contracts/trackRecord";

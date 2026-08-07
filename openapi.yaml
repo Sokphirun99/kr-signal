@@ -1,0 +1,534 @@
+openapi: 3.0.3
+info:
+  title: KR-Signal Public REST API
+  version: 1.0.0
+  description: |
+    Versioned, read-only REST API for external consumers, automated trading systems,
+    and quantitative researchers. Provides access to signal ledgers, performance
+    track records, and instrument metadata.
+    
+    ### Hard Rules & Invariants
+    - **Read-Only**: Pure database reads. Never triggers live Binance candle fetches or pipeline recalculations.
+    - **Methods**: Only `GET` is supported. Other methods return `405 Method Not Allowed`.
+    - **Response Envelopes**: All successful responses wrap payloads in `{ "data": ..., "meta": { "count": n, "generatedAt": "ISO-UTC" } }`.
+    - **Rate Limiting**: In-memory sliding window limiter of 60 requests per minute per API key. Returns `429 Too Many Requests` with a `Retry-After` header when exceeded.
+  contact:
+    name: KR-Signal Developer Relations
+    email: api@kr-signal.internal
+
+servers:
+  - url: /api/v1
+    description: Production v1 REST API
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /signals:
+    get:
+      summary: List signals with optional filtering
+      description: |
+        Retrieves signals from the immutable ledger ordered by openedAt descending.
+        Results are cached with `Cache-Control: public, max-age=30`.
+      parameters:
+        - name: symbol
+          in: query
+          required: false
+          description: Canonical trading symbol (e.g. BTCUSDT, ETHUSDT, XAUUSD, EURUSD, GBPUSD).
+          schema:
+            type: string
+            enum: [BTCUSDT, ETHUSDT, XAUUSD, EURUSD, GBPUSD]
+          example: BTCUSDT
+        - name: status
+          in: query
+          required: false
+          description: Filter by trade outcome or execution state.
+          schema:
+            type: string
+            enum: [open, tp1, tp2, tp3, sl, be, expired, undecidable]
+          example: open
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of signals to return (between 1 and 100, default 50).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          example: 50
+      responses:
+        '200':
+          description: Successfully retrieved signals list.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=30"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Signal'
+                  meta:
+                    $ref: '#/components/schemas/EnvelopeMeta'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '429':
+          $ref: '#/components/responses/429RateLimited'
+        '503':
+          $ref: '#/components/responses/503ApiDisabled'
+
+  /signals/{id}:
+    get:
+      summary: Get signal by ID
+      description: Retrieves a single signal by its numerical database identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numerical identifier of the signal.
+          schema:
+            type: integer
+            minimum: 1
+          example: 42
+      responses:
+        '200':
+          description: Signal retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Signal'
+                  meta:
+                    $ref: '#/components/schemas/EnvelopeMeta'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '429':
+          $ref: '#/components/responses/429RateLimited'
+        '503':
+          $ref: '#/components/responses/503ApiDisabled'
+
+  /track-record:
+    get:
+      summary: Get engine performance track record
+      description: |
+        Returns aggregated closed trade metrics, win rates, expectancy, and historical
+        equity curve. Results are cached with `Cache-Control: public, max-age=300`.
+      responses:
+        '200':
+          description: Track record metrics retrieved successfully.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TrackRecord'
+                  meta:
+                    $ref: '#/components/schemas/EnvelopeMeta'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '429':
+          $ref: '#/components/responses/429RateLimited'
+        '503':
+          $ref: '#/components/responses/503ApiDisabled'
+
+  /instruments:
+    get:
+      summary: Get covered instruments registry
+      description: |
+        Returns symbol metadata, precision decimals, spot pair mappings, and proxy notes.
+        Cached with `Cache-Control: public, max-age=3600`.
+      responses:
+        '200':
+          description: Instrument definitions retrieved successfully.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=3600"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Instrument'
+                  meta:
+                    $ref: '#/components/schemas/EnvelopeMeta'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '429':
+          $ref: '#/components/responses/429RateLimited'
+        '503':
+          $ref: '#/components/responses/503ApiDisabled'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key passed via the `x-api-key` HTTP header. Request keys from KR-Signal administrators.
+
+  schemas:
+    EnvelopeMeta:
+      type: object
+      required: [count, generatedAt]
+      properties:
+        count:
+          type: integer
+          description: Total number of items in the data payload.
+          example: 50
+        generatedAt:
+          type: string
+          format: date-time
+          description: UTC ISO timestamp when the response was generated.
+          example: "2026-08-08T01:50:00.000Z"
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+          example: "UNAUTHORIZED"
+        message:
+          type: string
+          description: Human-readable error description.
+          example: "Missing or invalid x-api-key header."
+
+    ErrorEnvelope:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        code:
+          type: string
+          description: Mirrored machine code for convenience.
+          example: "UNAUTHORIZED"
+        retryAfter:
+          type: integer
+          description: Seconds to wait before retrying (included on 429).
+          example: 30
+
+    Instrument:
+      type: object
+      required: [symbol, name, market, pair, decimals]
+      properties:
+        symbol:
+          type: string
+          example: "BTCUSDT"
+        name:
+          type: string
+          example: "Bitcoin"
+        market:
+          type: string
+          enum: [crypto, gold, forex]
+          example: "crypto"
+        pair:
+          type: string
+          example: "BTCUSDT"
+        decimals:
+          type: integer
+          example: 1
+        basisNote:
+          type: string
+          example: "PAXG/USDT proxy — tracks spot gold with a small token basis"
+
+    Signal:
+      type: object
+      required:
+        - id
+        - symbol
+        - market
+        - timeframe
+        - style
+        - side
+        - entry
+        - stopLoss
+        - tp1
+        - tp2
+        - tp3
+        - confidence
+        - status
+        - engine
+        - entryFilled
+        - setupAt
+        - openedAt
+        - expiresAt
+      properties:
+        id:
+          type: integer
+          example: 104
+        symbol:
+          type: string
+          example: "BTCUSDT"
+        market:
+          type: string
+          enum: [crypto, gold, forex]
+          example: "crypto"
+        timeframe:
+          type: string
+          enum: [15m, 1h, 4h]
+          example: "1h"
+        style:
+          type: string
+          enum: [trend, range]
+          example: "trend"
+        side:
+          type: string
+          enum: [buy, sell]
+          example: "buy"
+        entry:
+          type: number
+          example: 67200.5
+        stopLoss:
+          type: number
+          example: 66400.0
+        tp1:
+          type: number
+          example: 68320.0
+        tp2:
+          type: number
+          example: 69400.0
+        tp3:
+          type: number
+          example: 70500.0
+        confidence:
+          type: integer
+          example: 78
+        status:
+          type: string
+          enum: [open, tp1, tp2, tp3, sl, be, expired, undecidable]
+          example: "tp1"
+        engine:
+          type: string
+          enum: [rules, ai]
+          example: "rules"
+        entryFilled:
+          type: boolean
+          example: true
+        rMultiple:
+          type: number
+          nullable: true
+          example: 1.4
+        exitPrice:
+          type: number
+          nullable: true
+          example: 68320.0
+        setupAt:
+          type: string
+          format: date-time
+        openedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    EquityCurvePoint:
+      type: object
+      required: [tradeIndex, cumulativeR, closedAt, symbol, rMultiple]
+      properties:
+        tradeIndex:
+          type: integer
+          example: 12
+        cumulativeR:
+          type: number
+          example: 18.4
+        closedAt:
+          type: string
+          format: date-time
+        symbol:
+          type: string
+          example: "BTCUSDT"
+        rMultiple:
+          type: number
+          example: 1.4
+
+    TrackRecord:
+      type: object
+      required:
+        - totalClosed
+        - wins
+        - losses
+        - breakevens
+        - winRate
+        - profitFactor
+        - netRMultiple
+        - avgRMultiple
+        - maxDrawdownR
+        - expectancyR
+        - undecidable
+        - expired
+        - equityCurve
+        - byMarket
+      properties:
+        totalClosed:
+          type: integer
+          example: 150
+        wins:
+          type: integer
+          example: 95
+        losses:
+          type: integer
+          example: 45
+        breakevens:
+          type: integer
+          example: 10
+        winRate:
+          type: number
+          example: 63.3
+        profitFactor:
+          type: number
+          example: 2.15
+        netRMultiple:
+          type: number
+          example: 84.5
+        avgRMultiple:
+          type: number
+          example: 0.56
+        maxDrawdownR:
+          type: number
+          example: 4.2
+        expectancyR:
+          type: number
+          example: 0.56
+        undecidable:
+          type: integer
+          example: 2
+        expired:
+          type: integer
+          example: 14
+        equityCurve:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquityCurvePoint'
+        byMarket:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              trades:
+                type: integer
+              wins:
+                type: integer
+              winRate:
+                type: number
+              netR:
+                type: number
+
+  responses:
+    400BadRequest:
+      description: Invalid query or path parameter.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "BAD_REQUEST"
+              message: "Invalid status 'bogus'. Valid statuses: open, tp1, tp2, tp3, sl, be, expired, undecidable"
+            code: "BAD_REQUEST"
+
+    401Unauthorized:
+      description: Missing, invalid, or malformed x-api-key header.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "Missing or invalid x-api-key header."
+            code: "UNAUTHORIZED"
+
+    404NotFound:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "Signal with ID 999999 not found."
+            code: "NOT_FOUND"
+
+    405MethodNotAllowed:
+      description: HTTP method is not allowed on this endpoint.
+      headers:
+        Allow:
+          schema:
+            type: string
+            example: "GET, HEAD"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "METHOD_NOT_ALLOWED"
+              message: "Method not allowed. The public API only supports GET requests."
+            code: "METHOD_NOT_ALLOWED"
+
+    429RateLimited:
+      description: API key has exceeded 60 requests per minute.
+      headers:
+        Retry-After:
+          schema:
+            type: string
+            example: "35"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "RATE_LIMITED"
+              message: "Rate limit exceeded. Maximum 60 requests per minute. Retry after 35s."
+            code: "RATE_LIMITED"
+            retryAfter: 35
+
+    503ApiDisabled:
+      description: Public API access is disabled by configuration.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: "API_DISABLED"
+              message: "Public API is currently disabled. Contact support to request access."
+            code: "API_DISABLED"

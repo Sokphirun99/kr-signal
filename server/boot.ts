@@ -6,6 +6,7 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { handleCronPipeline } from "./routes/cron";
+import { publicApi } from "./routes/publicApi";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -17,6 +18,8 @@ app.get("/api/cron/pipeline", handleCronPipeline);
 app.post("/api/cron/pipeline", handleCronPipeline);
 app.get("/api/scan", handleCronPipeline);
 app.post("/api/scan", handleCronPipeline);
+
+app.route("/api/v1", publicApi);
 
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({

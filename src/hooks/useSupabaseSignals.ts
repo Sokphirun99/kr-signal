@@ -30,7 +30,7 @@ export interface SupabaseSignalFilters {
  */
 export function computeTrackFromSignals(signals: ClientSignal[]) {
   const mapped: ClosedSignalRow[] = signals.map((s) => {
-    const raw = s as Record<string, unknown>;
+    const raw = s as unknown as Record<string, unknown>;
     return {
       status: (raw.status ?? "open") as ClosedSignalRow["status"],
       rMultiple: Number(raw.rMultiple ?? raw.r_multiple ?? 0),
@@ -106,7 +106,6 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
 
   useEffect(() => {
     if (!isEnabled) {
-      setIsLoading(false);
       return;
     }
     let isMounted = true;

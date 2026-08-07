@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { matchSymbolsForText, type NewsItem } from "@contracts/news";
-import { getNews, fetchNewsFeed, FEEDS } from "./news";
+import { matchSymbolsForText } from "@contracts/news";
+import { getNews, fetchNewsFeed } from "./news";
 
 describe("matchSymbolsForText", () => {
   it("matches Bitcoin correctly to BTCUSDT", () => {
