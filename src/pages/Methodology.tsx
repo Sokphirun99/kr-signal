@@ -165,14 +165,14 @@ export default function Methodology() {
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs">
               <p className="text-zinc-400">
-                Need an API key? Request access by contacting our team at{" "}
+                Need an API key? Request access via{" "}
                 <a
                   href="mailto:khiev.sokpirun999@gmail.com"
                   className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
                 >
                   khiev.sokpirun999@gmail.com
                 </a>{" "}
-                with your use case.
+                with your integration details.
               </p>
               <a
                 href="/api/v1/openapi.yaml"

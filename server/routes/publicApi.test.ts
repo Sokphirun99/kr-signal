@@ -17,7 +17,6 @@ interface ApiResponse<T = unknown> {
   data?: T;
   meta?: { count: number; generatedAt: string };
   error?: ApiError;
-  code?: string;
   retryAfter?: number;
 }
 
@@ -86,7 +85,6 @@ describe("publicApi REST v1", () => {
       expect(res.status).toBe(401);
       const body = (await res.json()) as ApiResponse;
       expect(body.error?.code).toBe("UNAUTHORIZED");
-      expect(body.code).toBe("UNAUTHORIZED");
     });
 
     it("returns 401 when an invalid x-api-key is provided", async () => {
@@ -96,7 +94,6 @@ describe("publicApi REST v1", () => {
       expect(res.status).toBe(401);
       const body = (await res.json()) as ApiResponse;
       expect(body.error?.code).toBe("UNAUTHORIZED");
-      expect(body.code).toBe("UNAUTHORIZED");
     });
 
     it("returns 503 when PUBLIC_API_KEYS is unset or empty", async () => {
@@ -107,7 +104,6 @@ describe("publicApi REST v1", () => {
       expect(res.status).toBe(503);
       const body = (await res.json()) as ApiResponse;
       expect(body.error?.code).toBe("API_DISABLED");
-      expect(body.code).toBe("API_DISABLED");
     });
 
     it("returns 200 with envelope shape on valid x-api-key", async () => {
@@ -143,7 +139,6 @@ describe("publicApi REST v1", () => {
       expect(throttledRes.headers.get("Retry-After")).toBeTruthy();
       const body = (await throttledRes.json()) as ApiResponse;
       expect(body.error?.code).toBe("RATE_LIMITED");
-      expect(body.code).toBe("RATE_LIMITED");
       expect(body.retryAfter).toBeGreaterThan(0);
     });
   });

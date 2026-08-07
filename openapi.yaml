@@ -13,7 +13,7 @@ info:
     - **Response Envelopes**: All successful responses wrap payloads in `{ "data": ..., "meta": { "count": n, "generatedAt": "ISO-UTC" } }`.
     - **Rate Limiting**: In-memory sliding window limiter of 60 requests per minute per API key. Returns `429 Too Many Requests` with a `Retry-After` header when exceeded.
   contact:
-    name: KR-Signal Developer Relations
+    name: KR-Signal Support & Integration
     email: khiev.sokpirun999@gmail.com
 
 servers:
@@ -225,14 +225,10 @@ components:
 
     ErrorEnvelope:
       type: object
-      required: [error, code]
+      required: [error]
       properties:
         error:
           $ref: '#/components/schemas/ErrorDetail'
-        code:
-          type: string
-          description: Mirrored machine code for convenience.
-          example: "UNAUTHORIZED"
         retryAfter:
           type: integer
           description: Seconds to wait before retrying (included on 429).
@@ -460,7 +456,6 @@ components:
             error:
               code: "BAD_REQUEST"
               message: "Invalid status 'bogus'. Valid statuses: open, tp1, tp2, tp3, sl, be, expired, undecidable"
-            code: "BAD_REQUEST"
 
     401Unauthorized:
       description: Missing, invalid, or malformed x-api-key header.
@@ -472,7 +467,6 @@ components:
             error:
               code: "UNAUTHORIZED"
               message: "Missing or invalid x-api-key header."
-            code: "UNAUTHORIZED"
 
     404NotFound:
       description: Requested resource was not found.
@@ -484,7 +478,6 @@ components:
             error:
               code: "NOT_FOUND"
               message: "Signal with ID 999999 not found."
-            code: "NOT_FOUND"
 
     405MethodNotAllowed:
       description: HTTP method is not allowed on this endpoint.
@@ -501,7 +494,6 @@ components:
             error:
               code: "METHOD_NOT_ALLOWED"
               message: "Method not allowed. The public API only supports GET requests."
-            code: "METHOD_NOT_ALLOWED"
 
     429RateLimited:
       description: API key has exceeded 60 requests per minute.
@@ -518,7 +510,6 @@ components:
             error:
               code: "RATE_LIMITED"
               message: "Rate limit exceeded. Maximum 60 requests per minute. Retry after 35s."
-            code: "RATE_LIMITED"
             retryAfter: 35
 
     503ApiDisabled:
@@ -531,4 +522,3 @@ components:
             error:
               code: "API_DISABLED"
               message: "Public API is currently disabled. Contact support to request access."
-            code: "API_DISABLED"

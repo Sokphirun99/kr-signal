@@ -65,7 +65,6 @@ function jsonError(
   return c.json(
     {
       error: { code, message },
-      code,
       ...extra,
     },
     status,
