@@ -86,65 +86,104 @@ export function swingLevels(
   return { swingHigh, swingLow };
 }
 
-/** ATR percentile of the latest value vs its recent history (0–1) */
-export function atrPercentile(atr: (number | null)[], lookback = 100): number {
+const DEFAULT_ATR_PERCENTILE_LOOKBACK = 100;
+const MIN_ATR_PERCENTILE_SAMPLES = 20;
+const SQUEEZE_ATR_PERCENTILE_THRESHOLD = 0.15;
+const SQUEEZE_LOOKBACK_MULTIPLIER = 3;
+
+/**
+ * ATR percentile of the latest value vs its recent history (0–1).
+ * Inputs: atr series array, optional lookback (default 100).
+ * Outputs: percentile rank between 0 and 1 (default 0.5 when unready).
+ * Side effects: none.
+ * Failure modes: returns 0.5 on insufficient samples.
+ */
+export function atrPercentile(
+  atr: (number | null)[],
+  lookback = DEFAULT_ATR_PERCENTILE_LOOKBACK,
+): number {
   return atrPercentileAtIndex(atr, atr.length - 1, lookback);
 }
 
-/** ATR percentile at a given index vs its trailing history (0–1) */
+/**
+ * Calculates ATR percentile at a given index vs trailing history in a single O(lookback) pass.
+ * Inputs: atr series array, target index, optional lookback (default 100).
+ * Outputs: percentile rank between 0 and 1.
+ * Side effects: none (zero array allocations).
+ * Failure modes: returns 0.5 if index is invalid or valid samples < 20.
+ */
 export function atrPercentileAtIndex(
   atr: (number | null)[],
   idx: number,
-  lookback = 100,
+  lookback = DEFAULT_ATR_PERCENTILE_LOOKBACK,
 ): number {
   if (idx < 0 || idx >= atr.length) return 0.5;
-  const start = Math.max(0, idx - lookback + 1);
-  const vals = atr.slice(start, idx + 1).filter((v): v is number => v !== null && v > 0);
-  if (vals.length < 20) return 0.5;
   const current = atr[idx];
   if (current === null || current <= 0) return 0.5;
-  const below = vals.filter((v) => v <= current).length;
-  return below / vals.length;
+
+  const start = Math.max(0, idx - lookback + 1);
+  let totalValid = 0;
+  let below = 0;
+
+  for (let i = start; i <= idx; i++) {
+    const val = atr[i];
+    if (val !== null && val > 0) {
+      totalValid++;
+      if (val <= current) below++;
+    }
+  }
+
+  if (totalValid < MIN_ATR_PERCENTILE_SAMPLES) return 0.5;
+  return below / totalValid;
+}
+
+function countConsecutiveSqueeze(
+  atr: (number | null)[],
+  startIdx: number,
+  maxSteps: number,
+): number {
+  let count = 0;
+  const minIdx = Math.max(0, startIdx - maxSteps);
+  for (let k = startIdx; k >= minIdx; k--) {
+    if (atrPercentileAtIndex(atr, k, DEFAULT_ATR_PERCENTILE_LOOKBACK) < SQUEEZE_ATR_PERCENTILE_THRESHOLD) {
+      count++;
+    } else {
+      break;
+    }
+  }
+  return count;
 }
 
 /**
  * Calculates the count of consecutive recent closed candles where atrPercentile < 0.15.
+ * Inputs: atr series array, optional endIdx (default atr.length - 1), optional lookback (default 20).
+ * Outputs: consecutive count of squeeze candles.
+ * Side effects: none.
+ * Failure modes: returns 0 if endIdx is negative or out of bounds.
  */
 export function squeezeLength(
   atr: (number | null)[],
   endIdx: number = atr.length - 1,
   lookback = 20,
 ): number {
-  if (endIdx < 0) return 0;
-
-  const maxSearch = lookback * 3;
-  let countAtEnd = 0;
-  for (let k = endIdx; k >= 0 && k >= endIdx - maxSearch; k--) {
-    const pct = atrPercentileAtIndex(atr, k, 100);
-    if (pct < 0.15) {
-      countAtEnd++;
-    } else {
-      break;
-    }
-  }
+  if (endIdx < 0 || endIdx >= atr.length) return 0;
+  const maxSteps = lookback * SQUEEZE_LOOKBACK_MULTIPLIER;
+  const countAtEnd = countConsecutiveSqueeze(atr, endIdx, maxSteps);
   if (countAtEnd > 0) return countAtEnd;
-
-  let countPrior = 0;
-  for (let k = endIdx - 1; k >= 0 && k >= endIdx - maxSearch; k--) {
-    const pct = atrPercentileAtIndex(atr, k, 100);
-    if (pct < 0.15) {
-      countPrior++;
-    } else {
-      break;
-    }
-  }
-
-  return countPrior;
+  return countConsecutiveSqueeze(atr, endIdx - 1, maxSteps);
 }
+
+const DEFAULT_BB_PERIOD = 20;
+const DEFAULT_BB_STD_DEV_MULT = 2.0;
+const DEFAULT_ATR_PERIOD = 14;
+const KELTNER_ATR_MULT = 1.5;
 
 /**
  * Session VWAP (Volume Weighted Average Price) calculation.
- * Returns aligned array of cumulative volume-weighted average prices.
+ * Inputs: candles array.
+ * Outputs: aligned array of cumulative volume-weighted average prices.
+ * Side effects: none.
+ * Failure modes: fills leading or empty volume periods with null.
  */
 export function vwapSeries(candles: Candle[]): (number | null)[] {
   const out: (number | null)[] = new Array(candles.length).fill(null);
@@ -161,6 +200,32 @@ export function vwapSeries(candles: Candle[]): (number | null)[] {
   return out;
 }
 
+/**
+ * Calculates session VWAP at a specific candle index without allocating a full series.
+ * Inputs: candles array, target index.
+ * Outputs: cumulative volume-weighted average price or null.
+ * Side effects: none.
+ * Failure modes: returns null if idx is out of bounds or total volume is 0.
+ */
+export function vwapAt(candles: Candle[], idx: number): number | null {
+  if (idx < 0 || idx >= candles.length) return null;
+  let cumVolume = 0;
+  let cumTypicalVolume = 0;
+  for (let i = 0; i <= idx; i++) {
+    const { high, low, close, volume } = candles[i];
+    cumTypicalVolume += ((high + low + close) / 3) * volume;
+    cumVolume += volume;
+  }
+  return cumVolume > 0 ? cumTypicalVolume / cumVolume : null;
+}
+
+export interface BollingerBandPoint {
+  upper: number;
+  middle: number;
+  lower: number;
+  percentB: number;
+}
+
 export interface BollingerBandsResult {
   upper: (number | null)[];
   middle: (number | null)[];
@@ -168,55 +233,149 @@ export interface BollingerBandsResult {
   percentB: (number | null)[];
 }
 
+export interface TtmSqueezeContext {
+  ema?: number | null;
+  atr?: number | null;
+}
+
 /**
- * Bollinger Bands calculation.
+ * Computes Bollinger Band levels and percentB for a given mean and variance.
+ * Inputs: close price, window mean, window variance, standard deviation multiplier.
+ * Outputs: BollingerBandPoint object with computed levels.
+ * Side effects: none (pure calculation).
+ * Failure modes: clamps negative variance to 0 to prevent NaN under floating-point cancellation.
+ */
+export function calculateBandPoint(
+  close: number,
+  mean: number,
+  variance: number,
+  stdDevMult: number,
+): BollingerBandPoint {
+  const stdDev = Math.sqrt(Math.max(0, variance));
+  const upper = mean + stdDev * stdDevMult;
+  const lower = mean - stdDev * stdDevMult;
+  const percentB = upper === lower ? 0.5 : (close - lower) / (upper - lower);
+  return { upper, middle: mean, lower, percentB };
+}
+
+/**
+ * Calculates Bollinger Bands at a single specific candle index without array slicing allocations.
+ * Inputs: closes array, target index, optional period (default 20), optional stdDev multiplier (default 2.0).
+ * Outputs: BollingerBandPoint or null if insufficient history.
+ * Side effects: none.
+ * Failure modes: returns null if index is out of bounds or index < period - 1.
+ */
+export function bollingerBandsAt(
+  closes: number[],
+  idx: number,
+  period = DEFAULT_BB_PERIOD,
+  stdDevMult = DEFAULT_BB_STD_DEV_MULT,
+): BollingerBandPoint | null {
+  if (idx < period - 1 || idx >= closes.length) return null;
+  const start = idx - period + 1;
+  let sum = 0;
+  for (let i = start; i <= idx; i++) {
+    sum += closes[i];
+  }
+  const mean = sum / period;
+  let varianceSum = 0;
+  for (let i = start; i <= idx; i++) {
+    const diff = closes[i] - mean;
+    varianceSum += diff * diff;
+  }
+  const variance = varianceSum / period;
+  return calculateBandPoint(closes[idx], mean, variance, stdDevMult);
+}
+
+function setBandSeriesAt(
+  upper: (number | null)[],
+  middle: (number | null)[],
+  lower: (number | null)[],
+  percentB: (number | null)[],
+  idx: number,
+  point: BollingerBandPoint,
+): void {
+  upper[idx] = point.upper;
+  middle[idx] = point.middle;
+  lower[idx] = point.lower;
+  percentB[idx] = point.percentB;
+}
+
+/**
+ * Calculates Bollinger Bands across price closes without intermediate slice allocations.
+ * Inputs: closes array, optional period (default 20), optional stdDev multiplier (default 2.0).
+ * Outputs: BollingerBandsResult containing aligned null-padded series.
+ * Side effects: none.
+ * Failure modes: returns all-null series if closes length < period.
  */
 export function bollingerBandsSeries(
   closes: number[],
-  period = 20,
-  stdDevMult = 2.0,
+  period = DEFAULT_BB_PERIOD,
+  stdDevMult = DEFAULT_BB_STD_DEV_MULT,
 ): BollingerBandsResult {
   const upper: (number | null)[] = new Array(closes.length).fill(null);
   const middle: (number | null)[] = new Array(closes.length).fill(null);
   const lower: (number | null)[] = new Array(closes.length).fill(null);
   const percentB: (number | null)[] = new Array(closes.length).fill(null);
 
-  if (closes.length < period) {
-    return { upper, middle, lower, percentB };
-  }
+  if (closes.length < period) return { upper, middle, lower, percentB };
 
   for (let i = period - 1; i < closes.length; i++) {
-    const slice = closes.slice(i - period + 1, i + 1);
-    const mean = slice.reduce((a, b) => a + b, 0) / period;
-    const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
-    const stdDev = Math.sqrt(variance);
-
-    const u = mean + stdDev * stdDevMult;
-    const l = mean - stdDev * stdDevMult;
-
-    middle[i] = mean;
-    upper[i] = u;
-    lower[i] = l;
-    percentB[i] = u === l ? 0.5 : (closes[i] - l) / (u - l);
+    const point = bollingerBandsAt(closes, i, period, stdDevMult);
+    if (point) {
+      setBandSeriesAt(upper, middle, lower, percentB, i, point);
+    }
   }
 
   return { upper, middle, lower, percentB };
 }
 
 /**
- * TTM Squeeze check: Bollinger Bands inside Keltner Channels.
- * Returns true for candle indices where BB upper <= KC upper and BB lower >= KC lower.
+ * Evaluates TTM Squeeze state at a specific candle index with optional precomputed EMA/ATR inputs.
+ * Inputs: candles array, target index, optional bbPeriod, optional atrPeriod, optional precomputed context.
+ * Outputs: boolean indicating squeeze is on (true) or off (false).
+ * Side effects: none.
+ * Failure modes: returns false if index is out of bounds or indicator data is unavailable.
+ */
+export function ttmSqueezeAt(
+  candles: Candle[],
+  idx: number,
+  bbPeriod = DEFAULT_BB_PERIOD,
+  atrPeriod = DEFAULT_ATR_PERIOD,
+  precomputed?: TtmSqueezeContext,
+): boolean {
+  if (idx < 0 || idx >= candles.length) return false;
+  const closes = candles.map((c) => c.close);
+  const bb = bollingerBandsAt(closes, idx, bbPeriod, DEFAULT_BB_STD_DEV_MULT);
+  if (!bb) return false;
+
+  const emaVal = precomputed?.ema ?? emaSeries(closes, bbPeriod)[idx];
+  const atrVal = precomputed?.atr ?? atrSeries(candles, atrPeriod)[idx];
+  if (emaVal === null || atrVal === null || emaVal === undefined || atrVal === undefined) {
+    return false;
+  }
+
+  const kcu = emaVal + KELTNER_ATR_MULT * atrVal;
+  const kcl = emaVal - KELTNER_ATR_MULT * atrVal;
+  return bb.upper <= kcu && bb.lower >= kcl;
+}
+
+/**
+ * TTM Squeeze check: Bollinger Bands inside Keltner Channels across full candle history.
+ * Inputs: candles array, optional bbPeriod (default 20), optional atrPeriod (default 14).
+ * Outputs: boolean array aligned to candle history.
+ * Side effects: none.
+ * Failure modes: fills with false when indicators are null or insufficient data.
  */
 export function ttmSqueezeSeries(
   candles: Candle[],
-  bbPeriod = 20,
-  atrPeriod = 14,
+  bbPeriod = DEFAULT_BB_PERIOD,
+  atrPeriod = DEFAULT_ATR_PERIOD,
 ): boolean[] {
   const closes = candles.map((c) => c.close);
-  const bb = bollingerBandsSeries(closes, bbPeriod, 2.0);
+  const bb = bollingerBandsSeries(closes, bbPeriod, DEFAULT_BB_STD_DEV_MULT);
   const atr = atrSeries(candles, atrPeriod);
   const ema = emaSeries(closes, bbPeriod);
-
   const squeeze: boolean[] = new Array(candles.length).fill(false);
 
   for (let i = 0; i < candles.length; i++) {
@@ -226,10 +385,8 @@ export function ttmSqueezeSeries(
     const a = atr[i];
 
     if (bbu !== null && bbl !== null && e !== null && a !== null) {
-      // Keltner Channel bounds (EMA +/- 1.5 * ATR)
-      const kcu = e + 1.5 * a;
-      const kcl = e - 1.5 * a;
-      // Bollinger Bands inside Keltner Channels
+      const kcu = e + KELTNER_ATR_MULT * a;
+      const kcl = e - KELTNER_ATR_MULT * a;
       squeeze[i] = bbu <= kcu && bbl >= kcl;
     }
   }

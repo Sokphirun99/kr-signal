@@ -14,9 +14,9 @@ import {
   swingLevels,
   atrPercentile,
   squeezeLength,
-  vwapSeries,
-  bollingerBandsSeries,
-  ttmSqueezeSeries,
+  vwapAt,
+  bollingerBandsAt,
+  ttmSqueezeAt,
   adxSeries,
   rsiDivergence,
 } from "./indicators";
@@ -149,15 +149,13 @@ export function generateSetup(
     }
   }
 
-  const vwaps = vwapSeries(candles);
-  const bb = bollingerBandsSeries(closes, 20, 2.0);
-  const ttmSqueezes = ttmSqueezeSeries(candles, 20, 14);
+  const currentVwap = vwapAt(candles, i);
+  const bbPoint = bollingerBandsAt(closes, i, 20, 2.0);
+  const currentTtmSqueeze = ttmSqueezeAt(candles, i, 20, 14, { ema: f, atr: a });
   const { adx, plusDi, minusDi } = adxSeries(candles, 14);
   const { bullishDivergence, bearishDivergence } = rsiDivergence(candles, rsi, i, 20);
 
-  const currentVwap = vwaps[i];
-  const currentPercentB = bb.percentB[i];
-  const currentTtmSqueeze = ttmSqueezes[i];
+  const currentPercentB = bbPoint?.percentB ?? null;
   const currentAdx = adx[i];
   const currentPlusDi = plusDi[i];
   const currentMinusDi = minusDi[i];

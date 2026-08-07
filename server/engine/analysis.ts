@@ -7,13 +7,13 @@ import {
   adxSeries,
   atrPercentile,
   atrSeries,
-  bollingerBandsSeries,
+  bollingerBandsAt,
   emaSeries,
   rsiDivergence,
   rsiSeries,
   squeezeLength,
-  ttmSqueezeSeries,
-  vwapSeries,
+  ttmSqueezeAt,
+  vwapAt,
 } from "./indicators";
 
 export interface TechnicalAnalysis {
@@ -68,7 +68,7 @@ export function analyzeTechnicalData(candles: Candle[]): TechnicalAnalysis | nul
   const last20 = volumes.slice(Math.max(0, i - 19), i + 1);
   const averageVolume = last20.reduce((sum, value) => sum + value, 0) / last20.length;
   const relativeVolume = averageVolume > 0 ? candle.volume / averageVolume : 1;
-  const bands = bollingerBandsSeries(closes, 20, 2);
+  const bbPoint = bollingerBandsAt(closes, i, 20, 2.0);
   const dmi = adxSeries(candles, 14);
   const divergence = rsiDivergence(candles, rsi14, i, 20);
 
@@ -84,9 +84,9 @@ export function analyzeTechnicalData(candles: Candle[]): TechnicalAnalysis | nul
     rsi14: rsi,
     relativeVolume,
     squeezeLength: squeezeLength(atr14, i, 20),
-    vwap: vwapSeries(candles)[i],
-    bollingerPercentB: bands.percentB[i],
-    ttmSqueeze: ttmSqueezeSeries(candles, 20, 14)[i],
+    vwap: vwapAt(candles, i),
+    bollingerPercentB: bbPoint?.percentB ?? null,
+    ttmSqueeze: ttmSqueezeAt(candles, i, 20, 14, { ema: fast, atr }),
     adx14: dmi.adx[i],
     plusDi14: dmi.plusDi[i],
     minusDi14: dmi.minusDi[i],

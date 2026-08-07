@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Layout from "@/components/Layout";
 import TickerTape from "@/components/TickerTape";
 import StatCard from "@/components/StatCard";
@@ -17,9 +17,10 @@ export default function Home() {
   const funnel = trpc.signals.funnel.useQuery();
   const live = trpc.signals.list.useQuery({ status: "open", limit: 3 });
 
-  const { supabaseSignals } = useSupabaseSignals();
+  const isFallbackNeeded = Boolean(track.isError || (!track.isLoading && !track.data));
+  const { supabaseSignals } = useSupabaseSignals({ enabled: isFallbackNeeded, limit: 50 });
 
-  const fallbackTrack = computeTrackFromSignals(supabaseSignals);
+  const fallbackTrack = useMemo(() => computeTrackFromSignals(supabaseSignals), [supabaseSignals]);
   const tr = track.data ?? (supabaseSignals.length > 0 ? fallbackTrack : undefined);
   const displayLive =
     live.data && live.data.length > 0

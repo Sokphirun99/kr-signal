@@ -22,7 +22,7 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-const handleScan = async (c: Context) => {
+const handleCronPipeline = async (c: Context) => {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return c.json({ error: "CRON_SECRET not configured" }, 500);
@@ -34,15 +34,17 @@ const handleScan = async (c: Context) => {
   }
   try {
     const report = await forceRunPipelinePass();
-    return c.json({ ok: true, report });
+    return c.json(report);
   } catch (err) {
-    console.error("/api/scan error:", err);
+    console.error("/api/cron/pipeline error:", err);
     return c.json({ error: "Pipeline pass execution failed." }, 500);
   }
 };
 
-app.get("/api/scan", handleScan);
-app.post("/api/scan", handleScan);
+app.get("/api/cron/pipeline", handleCronPipeline);
+app.post("/api/cron/pipeline", handleCronPipeline);
+app.get("/api/scan", handleCronPipeline);
+app.post("/api/scan", handleCronPipeline);
 
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({

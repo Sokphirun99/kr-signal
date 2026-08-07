@@ -20,8 +20,8 @@
   ],
   "crons": [
     {
-      "path": "/api/scan",
-      "schedule": "0 0 * * *"
+      "path": "/api/cron/pipeline",
+      "schedule": "*/5 * * * *"
     }
   ],
   "rewrites": [

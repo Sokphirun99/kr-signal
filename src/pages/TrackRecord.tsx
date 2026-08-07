@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Layout from "@/components/Layout";
 import StatCard from "@/components/StatCard";
+import DataSourceBadge from "@/components/DataSourceBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
@@ -202,15 +203,26 @@ export default function TrackRecord() {
     document.title = "Verified Track Record — KR-Signal";
   }, []);
 
-  const { data: trpcTr, isLoading: isTrpcLoading } = trpc.signals.trackRecord.useQuery(undefined, {
+  const {
+    data: trpcTr,
+    isLoading: isTrpcLoading,
+    isError: isTrpcError,
+  } = trpc.signals.trackRecord.useQuery(undefined, {
     refetchInterval: 60_000,
+    retry: 2,
   });
   const funnel = trpc.signals.funnel.useQuery();
-  const { supabaseSignals } = useSupabaseSignals();
+  const isFallbackNeeded = Boolean(isTrpcError || (!isTrpcLoading && !trpcTr));
+  const { supabaseSignals, isLoading: isSupabaseLoading } = useSupabaseSignals({
+    enabled: isFallbackNeeded,
+    limit: 200,
+    historyOnly: true,
+  });
 
-  const fallbackTrack = computeTrackFromSignals(supabaseSignals);
+  const fallbackTrack = useMemo(() => computeTrackFromSignals(supabaseSignals), [supabaseSignals]);
   const tr = trpcTr ?? (supabaseSignals.length > 0 ? fallbackTrack : undefined);
-  const isLoading = isTrpcLoading && supabaseSignals.length === 0;
+  const isSnapshotMode = !trpcTr && supabaseSignals.length > 0;
+  const isLoading = isTrpcLoading || (isFallbackNeeded && isSupabaseLoading && supabaseSignals.length === 0);
 
   const closedCount = tr?.closed ?? 0;
   const isSampleMeaningful = closedCount >= 10;
@@ -243,10 +255,11 @@ export default function TrackRecord() {
               Verified track record
             </h1>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-xs text-zinc-400">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            <span>Updated live · Timestamps UTC</span>
-          </div>
+          <DataSourceBadge
+            mode={isSnapshotMode ? "snapshot" : "live"}
+            liveLabel="Updated live · Timestamps UTC"
+            snapshotLabel="Snapshot · retrying"
+          />
         </div>
 
         <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-400">
@@ -254,6 +267,12 @@ export default function TrackRecord() {
           take-profit, stop-loss or break-even actually touched on the candle tape —
           enter these numbers. Expired setups never do.
         </p>
+
+        {isSnapshotMode && (
+          <p className="mt-3 text-xs text-zinc-500">
+            Live connection interrupted — showing a snapshot. Retrying automatically.
+          </p>
+        )}
 
         {isLoading && (
           <>

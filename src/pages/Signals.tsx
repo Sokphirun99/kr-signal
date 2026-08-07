@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Layout from "@/components/Layout";
 import SignalCard from "@/components/SignalCard";
+import DataSourceBadge from "@/components/DataSourceBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
@@ -64,16 +65,21 @@ export default function Signals() {
       limit: 100,
     },
     {
-      refetchInterval: 5_000,
+      refetchInterval: 30_000,
+      retry: 2,
     },
   );
 
+  const isFallbackNeeded = Boolean(query.isError || (!query.isLoading && (!query.data || query.data.length === 0)));
   const { supabaseSignals } = useSupabaseSignals({
+    enabled: isFallbackNeeded,
     symbol,
     status: tab === "open" ? "open" : undefined,
     historyOnly: tab === "history",
+    limit: 100,
   });
 
+  const isSnapshotMode = isFallbackNeeded && supabaseSignals.length > 0;
   const rawSignals = query.data && query.data.length > 0 ? query.data : supabaseSignals;
 
   const displaySignals = useMemo(() => {
@@ -102,10 +108,11 @@ export default function Signals() {
               Published setups across all covered markets. Every signal is graded against candle tape and kept permanently in the ledger.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-xs text-emerald-400">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            <span>Live Feed · Auto-Refreshing</span>
-          </div>
+          <DataSourceBadge
+            mode={isSnapshotMode ? "snapshot" : "live"}
+            liveLabel="Live Feed · Auto-Refreshing"
+            snapshotLabel="Snapshot mode · retrying"
+          />
         </div>
 
         {/* Filters bar */}
@@ -174,6 +181,11 @@ export default function Signals() {
 
         {/* Signals Grid */}
         <div className="mt-6 space-y-4">
+          {isSnapshotMode && (
+            <p className="text-xs text-zinc-500">
+              Live connection interrupted — showing a snapshot. Retrying automatically.
+            </p>
+          )}
           {isLoadingSignals ? (
             Array.from({ length: 4 }).map((_, i) => <SignalCardSkeleton key={i} />)
           ) : displaySignals && displaySignals.length > 0 ? (
