@@ -1,19 +1,19 @@
-name: 5-Minute Pipeline Scan Cron
+name: Pipeline Scan Cron
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Trigger Signal Pipeline Scan
         run: |
           code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
-            --max-time 60 -X POST \
+            --max-time 120 --retry 2 --retry-delay 10 -X POST \
             https://kr-signal.vercel.app/api/cron/pipeline \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           echo "HTTP $code"; cat /tmp/resp.json
