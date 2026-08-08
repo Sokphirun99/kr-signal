@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/utils/supabase";
 import type { ClientSignal, ClosedSignalRow } from "@contracts/instruments";
-import { INSTRUMENTS } from "@contracts/instruments";
+import { INSTRUMENTS, formatPrice, getInstrument } from "@contracts/instruments";
 import { computeTrackRecordFromSignals } from "@contracts/trackRecord";
+import { playSignalChime } from "@/utils/audioChime";
+import { toast } from "sonner";
 
 const VALID_SYMBOLS = INSTRUMENTS.map((i) => i.symbol);
 const DEFAULT_SIGNAL_LIMIT = 100;
@@ -181,8 +183,36 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "signals" },
-        () => {
+        (payload) => {
           scheduleDebouncedFetch();
+
+          const record = (payload.new ?? {}) as Record<string, unknown>;
+          const symbol = String(record.symbol ?? "");
+          const inst = getInstrument(symbol);
+          const decimals = inst?.decimals ?? 2;
+          const entry = typeof record.entry === "number" ? formatPrice(record.entry, decimals) : String(record.entry ?? "");
+
+          if (payload.eventType === "INSERT" && symbol) {
+            const side = String(record.side ?? "buy").toUpperCase();
+            playSignalChime("new_signal");
+            toast.info(`⚡ Live Setup Published: ${symbol} ${side}`, {
+              description: `Entry: ${entry} · Style: ${String(record.style ?? "trend").toUpperCase()}`,
+            });
+          } else if (payload.eventType === "UPDATE" && symbol) {
+            const status = String(record.status ?? "");
+            if (status === "tp1" || status === "tp2" || status === "tp3") {
+              const rMult = record.rMultiple ?? record.r_multiple;
+              playSignalChime("take_profit");
+              toast.success(`🎯 Take Profit Hit: ${symbol} (${status.toUpperCase()})`, {
+                description: rMult ? `Trade closed with +${Number(rMult).toFixed(2)}R gain` : `Take profit target reached!`,
+              });
+            } else if (status === "sl") {
+              playSignalChime("stop_loss");
+              toast.error(`🛑 Stop Loss Hit: ${symbol}`, {
+                description: `Setup stopped out and recorded to public ledger.`,
+              });
+            }
+          }
         },
       )
       .subscribe((status) => {

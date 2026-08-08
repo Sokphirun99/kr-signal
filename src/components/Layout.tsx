@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GlowThreadsBackground from "@/components/GlowThreadsBackground";
 import TickerTape from "@/components/TickerTape";
+import { isAudioAlertsEnabled, toggleAudioAlerts, playSignalChime } from "@/utils/audioChime";
+import { toast } from "sonner";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -16,6 +18,26 @@ const NAV = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAudioActive, setIsAudioActive] = useState(false);
+
+  useEffect(() => {
+    setIsAudioActive(isAudioAlertsEnabled());
+  }, []);
+
+  const handleAudioToggle = () => {
+    const nextState = toggleAudioAlerts();
+    setIsAudioActive(nextState);
+    if (nextState) {
+      playSignalChime("new_signal");
+      toast.success("Live Audio Alerts Enabled", {
+        description: "You will hear a chime when new signals clear the gate.",
+      });
+    } else {
+      toast.info("Audio Alerts Muted", {
+        description: "Visual toast notifications will still appear.",
+      });
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-[#070a08] text-zinc-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden">
@@ -41,8 +63,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          {/* Right Actions: Desktop Nav */}
-          <div className="flex items-center gap-4">
+          {/* Right Actions: Desktop Nav & Sound Toggle */}
+          <div className="flex items-center gap-3">
             <nav className="hidden md:flex items-center gap-1.5 text-sm">
               {NAV.map((n) => (
                 <Link
@@ -60,11 +82,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
 
+            {/* Sound Alerts Opt-In Toggle */}
+            <button
+              type="button"
+              onClick={handleAudioToggle}
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-200 cursor-pointer",
+                isAudioActive
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-sm shadow-emerald-500/10"
+                  : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200",
+              )}
+              title={isAudioActive ? "Audio alerts enabled (Click to mute)" : "Enable live audio chimes"}
+              aria-label="Toggle live audio alerts"
+            >
+              {isAudioActive ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isAudioActive ? "Sound On" : "Muted"}</span>
+            </button>
+
             {/* Mobile Menu Toggle Button */}
             <button
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white md:hidden"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white md:hidden cursor-pointer"
               aria-label="Toggle navigation menu"
               aria-expanded={mobileOpen}
             >

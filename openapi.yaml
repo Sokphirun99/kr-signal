@@ -129,7 +129,7 @@ paths:
     get:
       summary: Get engine performance track record
       description: |
-        Returns aggregated closed trade metrics, win rates, expectancy, and historical
+        Returns aggregated closed trade metrics, win rates, streak statistics, and historical
         equity curve. Results are cached with `Cache-Control: public, max-age=300`.
       responses:
         '200':
@@ -357,95 +357,160 @@ components:
 
     EquityCurvePoint:
       type: object
-      required: [tradeIndex, cumulativeR, closedAt, symbol, rMultiple]
+      required: [date, cumulativeR, tradeR]
       properties:
-        tradeIndex:
-          type: integer
-          example: 12
-        cumulativeR:
-          type: number
-          example: 18.4
-        closedAt:
+        date:
           type: string
           format: date-time
-        symbol:
-          type: string
-          example: "BTCUSDT"
-        rMultiple:
+          description: UTC ISO timestamp when the trade was closed.
+          example: "2026-08-01T05:00:00.000Z"
+        cumulativeR:
           type: number
+          description: Cumulative sum of R-multiples across all closed trades up to this point.
+          example: 18.4
+        tradeR:
+          type: number
+          description: R-multiple outcome of this specific closed trade.
           example: 1.4
+
+    MarketBreakdown:
+      type: object
+      required: [market, closed, wins, winRate]
+      properties:
+        market:
+          type: string
+          enum: [crypto, gold, forex]
+          example: "crypto"
+        closed:
+          type: integer
+          description: Total number of closed trades in this market category.
+          example: 100
+        wins:
+          type: integer
+          description: Number of winning trades in this market category.
+          example: 65
+        winRate:
+          type: number
+          nullable: true
+          description: Win rate as a decimal between 0 and 1 (null if 0 closed trades).
+          example: 0.65
+
+    MonthlyBreakdown:
+      type: object
+      required: [month, closed, wins, winRate]
+      properties:
+        month:
+          type: string
+          description: UTC calendar month formatted as YYYY-MM.
+          example: "2026-08"
+        closed:
+          type: integer
+          description: Total number of closed trades in this month.
+          example: 45
+        wins:
+          type: integer
+          description: Number of winning trades in this month.
+          example: 30
+        winRate:
+          type: number
+          nullable: true
+          description: Monthly win rate as a decimal between 0 and 1 (null if 0 closed trades).
+          example: 0.667
 
     TrackRecord:
       type: object
       required:
-        - totalClosed
+        - closed
         - wins
-        - losses
-        - breakevens
-        - winRate
-        - profitFactor
-        - netRMultiple
-        - avgRMultiple
-        - maxDrawdownR
-        - expectancyR
+        - nonWins
         - undecidable
         - expired
-        - equityCurve
+        - winRate
+        - totalR
+        - avgR
+        - profitFactor
+        - bestStreak
+        - currentStreak
+        - firstOutcomeAt
+        - lastOutcomeAt
         - byMarket
+        - byMonth
+        - equityCurve
       properties:
-        totalClosed:
+        closed:
           type: integer
+          description: Total number of closed, outcome-graded trades (tp1, tp2, tp3, sl, be).
           example: 150
         wins:
           type: integer
+          description: Total number of winning trades reaching tp1, tp2, or tp3.
           example: 95
-        losses:
+        nonWins:
           type: integer
-          example: 45
-        breakevens:
-          type: integer
-          example: 10
-        winRate:
-          type: number
-          example: 63.3
-        profitFactor:
-          type: number
-          example: 2.15
-        netRMultiple:
-          type: number
-          example: 84.5
-        avgRMultiple:
-          type: number
-          example: 0.56
-        maxDrawdownR:
-          type: number
-          example: 4.2
-        expectancyR:
-          type: number
-          example: 0.56
+          description: Total number of non-winning closed trades (sl or be).
+          example: 55
         undecidable:
           type: integer
+          description: Trades invalidated due to instrument delisting or gap anomalies.
           example: 2
         expired:
           type: integer
+          description: Published setups that expired before entry price was filled.
           example: 14
+        winRate:
+          type: number
+          nullable: true
+          description: Win rate as a decimal between 0 and 1 (null if 0 closed trades).
+          example: 0.633
+        totalR:
+          type: number
+          description: Cumulative net R-multiple across all closed trades.
+          example: 84.5
+        avgR:
+          type: number
+          nullable: true
+          description: Average R-multiple per closed trade (null if 0 closed trades).
+          example: 0.56
+        profitFactor:
+          type: number
+          nullable: true
+          description: Ratio of gross winning R to gross losing R (null if 0 losses).
+          example: 2.15
+        bestStreak:
+          type: integer
+          description: Maximum consecutive winning trades in the track record history.
+          example: 8
+        currentStreak:
+          type: integer
+          description: Current active streak (+N for consecutive wins, -N for consecutive losses).
+          example: 3
+        firstOutcomeAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC ISO timestamp of the earliest closed trade.
+          example: "2026-08-01T00:00:00.000Z"
+        lastOutcomeAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC ISO timestamp of the most recent closed trade.
+          example: "2026-08-08T05:00:00.000Z"
+        byMarket:
+          type: array
+          description: Performance breakdown grouped by market category.
+          items:
+            $ref: '#/components/schemas/MarketBreakdown'
+        byMonth:
+          type: array
+          description: Chronological performance breakdown grouped by UTC month (YYYY-MM).
+          items:
+            $ref: '#/components/schemas/MonthlyBreakdown'
         equityCurve:
           type: array
+          description: Chronological equity curve series of closed trades.
           items:
             $ref: '#/components/schemas/EquityCurvePoint'
-        byMarket:
-          type: object
-          additionalProperties:
-            type: object
-            properties:
-              trades:
-                type: integer
-              wins:
-                type: integer
-              winRate:
-                type: number
-              netR:
-                type: number
 
   responses:
     400BadRequest:
