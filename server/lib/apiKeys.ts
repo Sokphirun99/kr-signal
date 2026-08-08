@@ -17,7 +17,10 @@ export type ApiKeyValidationResult =
  * Failure modes: returns empty array if variable is unset, empty, or whitespace-only.
  */
 export function getConfiguredApiKeys(): string[] {
-  const raw = process.env.PUBLIC_API_KEYS;
+  const raw =
+    process.env.PUBLIC_API_KEYS ||
+    process.env.API_KEYS ||
+    process.env.REST_API_KEYS;
   if (!raw || !raw.trim()) {
     return [];
   }
