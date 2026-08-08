@@ -30,6 +30,8 @@ import {
   fetchTakerRatio,
   fetchFearAndGreed,
 } from "./futures";
+import { getNews } from "./news";
+import { upsertNewsBatch, pruneNewsOlderThan7Days } from "../queries/news";
 
 const SCAN_INTERVAL_MS = 5 * 60_000; // one pipeline pass per 5 minutes max
 let lastPass = 0;
@@ -324,6 +326,17 @@ export async function runPipeline(): Promise<PipelineReport> {
     } catch {
       // Funnel bookkeeping must never break the pipeline
     }
+  }
+
+  // ---- Sync fresh news & prune anything older than 7 days -----------------
+  try {
+    const freshNews = await getNews(true);
+    if (freshNews.length > 0) {
+      await upsertNewsBatch(freshNews);
+    }
+    await pruneNewsOlderThan7Days();
+  } catch (err) {
+    console.error("[pipeline] News sync/prune error:", err);
   }
 
   console.timeEnd("pipeline-total");

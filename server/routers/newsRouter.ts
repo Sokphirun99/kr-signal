@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
 import { getNews } from "../engine/news";
+import { getRecentNewsFromDb } from "../queries/news";
 import { INSTRUMENTS, type Market } from "@contracts/instruments";
 
 const MAX_NEWS_LIMIT = 100;
@@ -21,7 +22,7 @@ function getSymbolsForMarket(market: Market): Set<string> {
 export const newsRouter = createRouter({
   /**
    * News headlines feed with optional symbol and market category filtering.
-   * Returns unmatched items only when no filter is applied.
+   * Serves 7-day persisted headlines from database with live fallback.
    */
   list: publicQuery
     .input(
@@ -34,7 +35,11 @@ export const newsRouter = createRouter({
         .nullish(),
     )
     .query(async ({ input }) => {
-      const allNews = await getNews();
+      let allNews = await getRecentNewsFromDb(MAX_NEWS_LIMIT);
+      if (!allNews || allNews.length === 0) {
+        allNews = await getNews();
+      }
+
       const symbolFilter = input?.symbol?.trim();
       const marketFilter = input?.market ?? null;
       const limit = input?.limit ?? DEFAULT_NEWS_LIMIT;

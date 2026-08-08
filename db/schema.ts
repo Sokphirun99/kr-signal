@@ -3,6 +3,8 @@ import {
   pgEnum,
   serial,
   varchar,
+  text,
+  jsonb,
   doublePrecision,
   integer,
   boolean,
@@ -85,8 +87,31 @@ export const scanRuns = pgTable(
   (t) => [index("ran_idx").on(t.ranAt)],
 );
 
+/**
+ * news — 7-day rolling market headlines with automatic pruning.
+ */
+export const news = pgTable(
+  "news",
+  {
+    id: serial("id").primaryKey(),
+    url: text("url").notNull().unique(),
+    title: text("title").notNull(),
+    source: varchar("source", { length: 100 }).notNull(),
+    sources: jsonb("sources").$type<string[]>(),
+    summary: text("summary"),
+    imageUrl: text("image_url"),
+    matchedSymbols: jsonb("matched_symbols").$type<string[]>().notNull(),
+    publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("news_published_idx").on(t.publishedAt)],
+);
+
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = typeof signals.$inferInsert;
 export type ScanRun = typeof scanRuns.$inferSelect;
+export type News = typeof news.$inferSelect;
+export type InsertNews = typeof news.$inferInsert;
+
 
 

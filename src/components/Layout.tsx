@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GlowThreadsBackground from "@/components/GlowThreadsBackground";
+import TickerTape from "@/components/TickerTape";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -98,6 +99,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
       </header>
+
+      {/* Full-width Market Price Ticker Tape */}
+      <TickerTape />
 
       {/* Main Content */}
       <main className="relative z-10 mx-auto max-w-6xl px-4 pb-20">{children}</main>

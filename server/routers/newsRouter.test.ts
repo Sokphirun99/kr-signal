@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { appRouter } from "../router";
 import * as newsEngine from "../engine/news";
+import * as newsQueries from "../queries/news";
 import type { NewsItem } from "@contracts/news";
 
 describe("newsRouter", () => {
@@ -37,6 +38,7 @@ describe("newsRouter", () => {
   const mockContext = { req: {} as Request, resHeaders: new Headers() };
 
   it("returns all news on general feed without filters", async () => {
+    vi.spyOn(newsQueries, "getRecentNewsFromDb").mockResolvedValue(mockNews);
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
     const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({});
@@ -44,6 +46,7 @@ describe("newsRouter", () => {
   });
 
   it("filters by specific symbol", async () => {
+    vi.spyOn(newsQueries, "getRecentNewsFromDb").mockResolvedValue(mockNews);
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
     const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({ symbol: "BTCUSDT" });
@@ -52,6 +55,7 @@ describe("newsRouter", () => {
   });
 
   it("filters by market category", async () => {
+    vi.spyOn(newsQueries, "getRecentNewsFromDb").mockResolvedValue(mockNews);
     vi.spyOn(newsEngine, "getNews").mockResolvedValue(mockNews);
     const caller = appRouter.createCaller(mockContext);
     const result = await caller.news.list({ market: "gold" });
@@ -59,3 +63,4 @@ describe("newsRouter", () => {
     expect(result[0].matchedSymbols).toContain("XAUUSD");
   });
 });
+

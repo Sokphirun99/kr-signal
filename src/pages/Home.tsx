@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 import Layout from "@/components/Layout";
-import TickerTape from "@/components/TickerTape";
 import StatCard from "@/components/StatCard";
 import SignalCard from "@/components/SignalCard";
 import { trpc } from "@/providers/trpc";
@@ -56,8 +55,6 @@ export default function Home() {
 
   return (
     <Layout>
-      <TickerTape />
-
       {/* Hero Section */}
       <section className="py-14 sm:py-20">
         <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
