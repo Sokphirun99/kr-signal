@@ -4,7 +4,7 @@
 
 import { getDb } from "./connection";
 import { signals, scanRuns, type Signal } from "@db/schema";
-import { and, desc, eq, ne, inArray, gte, sql } from "drizzle-orm";
+import { and, desc, eq, ne, inArray, gte, lt, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
   INSTRUMENTS,
@@ -59,17 +59,7 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
   const validSignals = await db
     .select()
     .from(signals)
-    .where(inArray(signals.symbol, VALID_SYMBOLS))
-    .orderBy(signals.closedAt);
-
-  const undecidableRows = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(signals)
-    .where(and(inArray(signals.symbol, VALID_SYMBOLS), eq(signals.status, "undecidable")));
-  const expiredRows = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(signals)
-    .where(and(inArray(signals.symbol, VALID_SYMBOLS), eq(signals.status, "expired")));
+    .where(and(inArray(signals.symbol, VALID_SYMBOLS), inArray(signals.status, CLOSED_STATUSES)));
 
   const closedRows: ClosedSignalRow[] = validSignals.map((s) => ({
     status: s.status as SignalStatus,
@@ -78,10 +68,7 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
     closedAt: s.closedAt,
   }));
 
-  return computeTrackRecordFromSignals(closedRows, {
-    undecidable: Number(undecidableRows[0]?.n ?? 0),
-    expired: Number(expiredRows[0]?.n ?? 0),
-  });
+  return computeTrackRecordFromSignals(closedRows);
 }
 
 export interface Funnel {
@@ -108,4 +95,31 @@ export async function computeFunnel(days = 7): Promise<Funnel> {
     published: Number(r?.published ?? 0),
     since,
   };
+}
+
+/**
+ * Automatically purges scan_runs audit telemetry older than 14 days.
+ * Preserves the 7-day funnel calculation window while keeping database storage minimal.
+ *
+ * Inputs: none.
+ * Outputs: number of deleted records.
+ * Side effects: deletes matching rows from public.scan_runs.
+ * Failure modes: returns 0 on error; never throws.
+ */
+export async function pruneScanRunsOlderThan14Days(): Promise<number> {
+  try {
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000);
+    const deleted = await getDb()
+      .delete(scanRuns)
+      .where(lt(scanRuns.ranAt, fourteenDaysAgo))
+      .returning({ id: scanRuns.id });
+
+    if (deleted.length > 0) {
+      console.log(`[funnel] Pruned ${deleted.length} obsolete scan_runs older than 14 days.`);
+    }
+    return deleted.length;
+  } catch (err) {
+    console.error("[funnel] Failed to prune old scan_runs:", err);
+    return 0;
+  }
 }
