@@ -9,7 +9,7 @@ interface SignalStatusBadgeProps {
 }
 
 /**
- * Renders status pills, confidence pill, R-multiple badge, and TradingView chart trigger.
+ * Renders status pills, confidence pill, R-multiple badge, and TradingView chart trigger in a single clean row.
  * Inputs: props with canonical ClientSignal and optional instrument pair.
  * Outputs: React JSX header badge group.
  * Side effects: none.
@@ -22,15 +22,15 @@ export function SignalStatusBadge({ signal, pair }: SignalStatusBadgeProps) {
     ? signal.entryFilled
       ? {
           label: "In position",
-          cls: "bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse font-semibold",
+          cls: "bg-amber-500/20 text-amber-300 border-amber-500/30 font-semibold",
         }
       : {
           label: "Live",
-          cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
+          cls: "bg-sky-500/15 text-sky-400 border-sky-500/20 font-medium",
         }
     : STATUS_STYLE[signal.status] ?? {
         label: signal.status,
-        cls: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20",
+        cls: "bg-zinc-500/15 text-zinc-400 border-zinc-500/20 font-medium",
       };
 
   const confCls =
@@ -44,49 +44,51 @@ export function SignalStatusBadge({ signal, pair }: SignalStatusBadgeProps) {
   const tradingViewUrl = `https://www.tradingview.com/chart/?symbol=BINANCE:${encodeURIComponent(tvSymbol)}`;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
-      <div className="flex items-center gap-2">
-        <a
-          href={tradingViewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={`View ${signal.symbol} chart on TradingView`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-zinc-300 transition-all hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-400 shadow-2xs"
+    <div className="flex flex-wrap items-center gap-1.5">
+      {/* TradingView Link */}
+      <a
+        href={tradingViewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`View ${signal.symbol} chart on TradingView`}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 text-[11px] font-medium text-zinc-300 transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-400"
+      >
+        <LineChart className="h-3 w-3 text-emerald-400" />
+        <span>TradingView</span>
+        <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+      </a>
+
+      {/* Outcome R-Multiple badge when closed */}
+      {signal.status !== "open" && rMult !== null && (
+        <span
+          className={cn(
+            "inline-flex h-7 items-center rounded-md px-2 font-mono text-[11px] font-bold border tabular-nums",
+            rMult > 0
+              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+              : rMult < 0
+              ? "bg-red-500/20 text-red-300 border-red-500/30"
+              : "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+          )}
         >
-          <LineChart className="h-3 w-3 text-emerald-400" />
-          <span>TradingView</span>
-          <ExternalLink className="h-2.5 w-2.5 opacity-60" />
-        </a>
-
-        {signal.status !== "open" && rMult !== null ? (
-          <span
-            className={cn(
-              "rounded-lg px-2.5 py-0.5 font-mono text-xs font-bold shadow-xs border tabular-nums",
-              rMult > 0
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                : rMult < 0
-                ? "bg-red-500/20 text-red-300 border-red-500/30"
-                : "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
-            )}
-          >
-            {rMult > 0 ? "+" : ""}
-            {rMult.toFixed(2)}R
-          </span>
-        ) : null}
-
-        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium border", st.cls)}>
-          {st.label}
+          {rMult > 0 ? "+" : ""}
+          {rMult.toFixed(2)}R
         </span>
-      </div>
+      )}
 
+      {/* State / Outcome Pill */}
+      <span className={cn("inline-flex h-7 items-center rounded-md px-2.5 text-[11px] border", st.cls)}>
+        {st.label}
+      </span>
+
+      {/* Confidence Pill */}
       <span
         title="Rule-engine confidence score — 60% floor to publish"
         className={cn(
-          "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-medium shadow-2xs tabular-nums cursor-help",
+          "inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] font-medium tabular-nums cursor-help",
           confCls,
         )}
       >
-        conf {signal.confidence}%
+        <span>conf {signal.confidence}%</span>
         <Info className="h-3 w-3 opacity-70" />
       </span>
     </div>

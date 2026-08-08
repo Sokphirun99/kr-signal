@@ -5,18 +5,45 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { optionalNumber } from "./signalFormat";
 
-interface LevelProps {
+interface LevelCardProps {
   label: string;
-  value: number;
-  decimals: number;
+  value: number | string;
+  decimals?: number;
+  subtitle: string;
+  subtitleType?: "risk" | "reward" | "neutral";
 }
 
-function Level({ label, value, decimals }: LevelProps) {
+function LevelCard({
+  label,
+  value,
+  decimals,
+  subtitle,
+  subtitleType = "neutral",
+}: LevelCardProps) {
+  const formattedValue =
+    typeof value === "number" && decimals !== undefined
+      ? formatPrice(value, decimals)
+      : String(value);
+
   return (
-    <div>
-      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">{label}</p>
-      <p className="font-mono text-sm font-semibold tabular-nums text-zinc-100 mt-0.5">
-        {formatPrice(value, decimals)}
+    <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 transition-colors hover:border-white/10">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+        {label}
+      </span>
+      <p className="mt-1 font-mono text-sm font-bold tabular-nums text-white">
+        {formattedValue}
+      </p>
+      <p
+        className={cn(
+          "mt-0.5 font-mono text-[10px] font-medium",
+          subtitleType === "risk"
+            ? "text-red-400"
+            : subtitleType === "reward"
+            ? "text-emerald-400"
+            : "text-zinc-400",
+        )}
+      >
+        {subtitle}
       </p>
     </div>
   );
@@ -103,7 +130,7 @@ function SignalTechnicalAnalysis({
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/10 transition-colors"
+              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <span>{isExpanded ? "Collapse" : "All indicators"}</span>
               {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -195,9 +222,9 @@ interface SignalLevelsProps {
 }
 
 /**
- * Renders the Entry, Stop Loss, TP1, TP2, TP3, R:R ratio grid, and live indicator panel.
+ * Renders the Entry, Stop Loss, TP1-3 levels, and R:R ratio in distinct containerized boxes.
  * Inputs: props containing ClientSignal and price decimals.
- * Outputs: React JSX level grid and technical analysis expander.
+ * Outputs: React JSX containerized level grid and technical analysis.
  * Side effects: queries tRPC for indicator snapshots.
  * Failure modes: renders graceful error states on query failures.
  */
@@ -207,33 +234,74 @@ export function SignalLevels({ signal, decimals }: SignalLevelsProps) {
   const maxTp = isCapped ? signal.tp2 : signal.tp3;
   const rr = stopDiff > 0 ? Math.abs(maxTp - signal.entry) / stopDiff : 0;
 
+  const riskPct = signal.entry > 0 ? (stopDiff / signal.entry) * 100 : 0;
+  const tp1Delta = Math.abs(signal.tp1 - signal.entry);
+  const tp1Pct = signal.entry > 0 ? (tp1Delta / signal.entry) * 100 : 0;
+  const tp2Delta = Math.abs(signal.tp2 - signal.entry);
+  const tp2Pct = signal.entry > 0 ? (tp2Delta / signal.entry) * 100 : 0;
+  const tp3Delta = Math.abs(signal.tp3 - signal.entry);
+  const tp3Pct = signal.entry > 0 ? (tp3Delta / signal.entry) * 100 : 0;
+
   return (
     <>
+      {/* Containerized Level Cards Grid */}
       <div
         className={cn(
-          "mt-4 grid gap-4 rounded-lg bg-black/20 p-3 border border-white/5",
-          isCapped ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3 sm:grid-cols-6",
+          "mt-4 grid gap-2.5",
+          isCapped ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
         )}
       >
-        <Level label="Entry" value={signal.entry} decimals={decimals} />
-        <Level label="Stop" value={signal.stopLoss} decimals={decimals} />
-        <Level label="TP1" value={signal.tp1} decimals={decimals} />
-        <Level
-          label={isCapped ? "TP2 · final" : "TP2"}
+        <LevelCard
+          label="Entry"
+          value={signal.entry}
+          decimals={decimals}
+          subtitle="Pivot price"
+          subtitleType="neutral"
+        />
+
+        <LevelCard
+          label="Stop Loss"
+          value={signal.stopLoss}
+          decimals={decimals}
+          subtitle={`-${riskPct.toFixed(2)}% (1.0R risk)`}
+          subtitleType="risk"
+        />
+
+        <LevelCard
+          label="Target 1"
+          value={signal.tp1}
+          decimals={decimals}
+          subtitle={`+${tp1Pct.toFixed(2)}% (1.4R)`}
+          subtitleType="reward"
+        />
+
+        <LevelCard
+          label={isCapped ? "Target 2 (Final)" : "Target 2"}
           value={signal.tp2}
           decimals={decimals}
+          subtitle={`+${tp2Pct.toFixed(2)}% (2.2R)`}
+          subtitleType="reward"
         />
-        {!isCapped && <Level label="TP3" value={signal.tp3} decimals={decimals} />}
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-            {isCapped ? "Max R:R" : "R:R"}
-          </p>
-          <p className="font-mono text-sm font-semibold tabular-nums text-zinc-100 mt-0.5">
-            1 : {rr.toFixed(1)}
-          </p>
-        </div>
+
+        {!isCapped && (
+          <LevelCard
+            label="Target 3"
+            value={signal.tp3}
+            decimals={decimals}
+            subtitle={`+${tp3Pct.toFixed(2)}% (3.0R)`}
+            subtitleType="reward"
+          />
+        )}
+
+        <LevelCard
+          label="Max R:R"
+          value={`1 : ${rr.toFixed(1)}`}
+          subtitle="Reward / Risk"
+          subtitleType="reward"
+        />
       </div>
 
+      {/* Live Technical Analysis Panel */}
       <SignalTechnicalAnalysis
         symbol={signal.symbol}
         timeframe={signal.timeframe as Timeframe}
