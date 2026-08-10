@@ -57,6 +57,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
       "If a candle opens beyond a stop — a gap straight through the level — the exit is graded at the candle's open price, not at the stop. Slippage counts against the record, so a stop-out can land slightly worse than -1R.",
       "After the first target is touched, the stop moves to break-even. A later reversal then closes the signal at 0R instead of a loss.",
       "After the second target is touched, the fixed third target is replaced with a dynamic 2.5×ATR trailing stop (ratcheted strictly in the trade's favor), graded the same conservative way on any trail breach.",
+      "Crypto setups use shorter validity windows so stale plans leave the live feed sooner: 4 hours for 15m, 12 hours for 1h, and 48 hours for 4h. Gold and forex retain their slower-market windows.",
     ],
   },
   {

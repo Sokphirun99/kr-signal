@@ -9,7 +9,7 @@
 import {
   INSTRUMENTS,
   TIMEFRAMES,
-  EXPIRY_MS,
+  getSignalExpiryMs,
   TF_MS,
   CLOSED_STATUSES,
   WIN_STATUSES,
@@ -172,7 +172,9 @@ async function runBacktest(): Promise<void> {
           exitPrice: null,
           setupAt: new Date(setup.setupAt),
           openedAt: new Date(setup.setupAt),
-          expiresAt: new Date(setup.setupAt + EXPIRY_MS[tf]),
+          expiresAt: new Date(
+            setup.setupAt + getSignalExpiryMs(inst.market, tf)
+          ),
           closedAt: null,
         };
 

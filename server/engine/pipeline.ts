@@ -16,7 +16,7 @@ import { and, eq } from "drizzle-orm";
 import {
   INSTRUMENTS,
   TIMEFRAMES,
-  EXPIRY_MS,
+  getSignalExpiryMs,
   type Timeframe,
 } from "@contracts/instruments";
 import { type Candle, fetchClosedKlines } from "./binance";
@@ -404,7 +404,10 @@ export async function runPipeline(
                     engineConfigVersion: engineSnapshot.version,
                     engine: "rules",
                     setupAt: new Date(setup.setupAt),
-                    expiresAt: new Date(Date.now() + EXPIRY_MS[timeframe]),
+                    expiresAt: new Date(
+                      Date.now() +
+                        getSignalExpiryMs(instrument.market, timeframe)
+                    ),
                   };
                   try {
                     await getDb().transaction(async tx => {

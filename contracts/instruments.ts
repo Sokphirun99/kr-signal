@@ -104,12 +104,54 @@ export const TF_MS: Record<Timeframe, number> = {
   "4h": 4 * 60 * 60_000,
 };
 
-/** How long a published setup stays valid before it expires ungraded */
+/** Default validity for slower proxy markets (gold and forex). */
 export const EXPIRY_MS: Record<Timeframe, number> = {
   "15m": 8 * 60 * 60_000, // 8 hours
   "1h": 24 * 60 * 60_000, // 1 day
   "4h": 4 * 24 * 60 * 60_000, // 4 days
 };
+
+/** Shorter validity for crypto, where setups become stale more quickly. */
+export const CRYPTO_EXPIRY_MS: Record<Timeframe, number> = {
+  "15m": 4 * 60 * 60_000, // 4 hours
+  "1h": 12 * 60 * 60_000, // 12 hours
+  "4h": 2 * 24 * 60 * 60_000, // 48 hours
+};
+
+/** Returns the publication-time validity window for a market/timeframe pair. */
+export function getSignalExpiryMs(
+  market: Market,
+  timeframe: Timeframe
+): number {
+  return market === "crypto"
+    ? CRYPTO_EXPIRY_MS[timeframe]
+    : EXPIRY_MS[timeframe];
+}
+
+/**
+ * Caps a stored expiry at the current market policy. This lets existing open
+ * signals adopt shorter windows without ever extending an older deadline.
+ */
+export function getEffectiveSignalExpiry(
+  market: Market,
+  timeframe: Timeframe,
+  openedAt: Date,
+  storedExpiresAt: Date
+): Date {
+  if (market !== "crypto") return storedExpiresAt;
+
+  const storedDuration = storedExpiresAt.getTime() - openedAt.getTime();
+  const legacyDuration = EXPIRY_MS[timeframe];
+  const currentDuration = CRYPTO_EXPIRY_MS[timeframe];
+  const migrationToleranceMs = 5 * 60_000;
+  const usesLegacyWindow =
+    storedDuration > currentDuration &&
+    storedDuration <= legacyDuration + migrationToleranceMs;
+
+  return usesLegacyWindow
+    ? new Date(openedAt.getTime() + currentDuration)
+    : storedExpiresAt;
+}
 
 /** Statuses that count as a market-graded (closed) outcome */
 export const CLOSED_STATUSES: SignalStatus[] = [

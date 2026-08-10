@@ -1,15 +1,39 @@
-import { parseUtcDate } from "@contracts/instruments";
+import { getEffectiveSignalExpiry, parseUtcDate } from "@contracts/instruments";
 import type { ClientSignal } from "@contracts/instruments";
 
 export const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  open: { label: "Live", cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20" },
-  tp1: { label: "TP1 hit", cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" },
-  tp2: { label: "TP2 hit", cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" },
-  tp3: { label: "Full target", cls: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" },
-  sl: { label: "Stopped", cls: "bg-red-500/15 text-red-400 border border-red-500/20" },
-  be: { label: "Break-even", cls: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20" },
-  expired: { label: "Expired", cls: "bg-amber-500/15 text-amber-400 border border-amber-500/20" },
-  undecidable: { label: "Undecidable", cls: "bg-purple-500/15 text-purple-400 border border-purple-500/20" },
+  open: {
+    label: "Live",
+    cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
+  },
+  tp1: {
+    label: "TP1 hit",
+    cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
+  },
+  tp2: {
+    label: "TP2 hit",
+    cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
+  },
+  tp3: {
+    label: "Full target",
+    cls: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+  },
+  sl: {
+    label: "Stopped",
+    cls: "bg-red-500/15 text-red-400 border border-red-500/20",
+  },
+  be: {
+    label: "Break-even",
+    cls: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20",
+  },
+  expired: {
+    label: "Expired",
+    cls: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
+  },
+  undecidable: {
+    label: "Undecidable",
+    cls: "bg-purple-500/15 text-purple-400 border border-purple-500/20",
+  },
 };
 
 /**
@@ -48,7 +72,10 @@ export function formatDisplayTime(dateInput: Date | string): string {
  * Side effects: reads current timestamp (Date.now()).
  * Failure modes: returns "expired" if timestamp has passed.
  */
-export function getTimeLeft(expiresAt: Date | string): { text: string; urgencyCls: string } {
+export function getTimeLeft(expiresAt: Date | string): {
+  text: string;
+  urgencyCls: string;
+} {
   const ms = parseUtcDate(expiresAt).getTime() - Date.now();
   if (ms <= 0) return { text: "expired", urgencyCls: "text-zinc-400" };
 
@@ -74,7 +101,10 @@ export function getTimeLeft(expiresAt: Date | string): { text: string; urgencyCl
  * Side effects: none.
  * Failure modes: returns "—" on null/undefined.
  */
-export function optionalNumber(value: number | null | undefined, digits = 2): string {
+export function optionalNumber(
+  value: number | null | undefined,
+  digits = 2
+): string {
   if (value === null || value === undefined) return "—";
   return value.toFixed(digits);
 }
@@ -86,10 +116,25 @@ export function optionalNumber(value: number | null | undefined, digits = 2): st
  * Side effects: none.
  * Failure modes: falls back to safe defaults on missing fields.
  */
-export function normalizeSignal(rawSignal: ClientSignal | Record<string, unknown>): ClientSignal {
+export function normalizeSignal(
+  rawSignal: ClientSignal | Record<string, unknown>
+): ClientSignal {
   const raw = rawSignal as Record<string, unknown>;
+  const openedAt = parseUtcDate(raw.openedAt ?? raw.opened_at);
+  const storedExpiresAt = parseUtcDate(raw.expiresAt ?? raw.expires_at);
+  const market = String(raw.market ?? "crypto") as ClientSignal["market"];
+  const timeframe = String(raw.timeframe ?? "15m") as ClientSignal["timeframe"];
+  const expiresAt = getEffectiveSignalExpiry(
+    market as "crypto" | "gold" | "forex",
+    timeframe as "15m" | "1h" | "4h",
+    openedAt,
+    storedExpiresAt
+  );
+
   return {
     ...(raw as unknown as ClientSignal),
+    market,
+    timeframe,
     entry: Number(raw.entry ?? 0),
     stopLoss: Number(raw.stopLoss ?? raw.stop_loss ?? 0),
     tp1: Number(raw.tp1 ?? 0),
@@ -99,8 +144,11 @@ export function normalizeSignal(rawSignal: ClientSignal | Record<string, unknown
     confidence: Number(raw.confidence ?? 0),
     rMultiple: (raw.rMultiple ?? raw.r_multiple ?? null) as number | null,
     exitPrice: (raw.exitPrice ?? raw.exit_price ?? null) as number | null,
-    openedAt: parseUtcDate(raw.openedAt ?? raw.opened_at),
-    expiresAt: parseUtcDate(raw.expiresAt ?? raw.expires_at),
-    closedAt: raw.closedAt || raw.closed_at ? parseUtcDate(raw.closedAt ?? raw.closed_at) : null,
+    openedAt,
+    expiresAt,
+    closedAt:
+      raw.closedAt || raw.closed_at
+        ? parseUtcDate(raw.closedAt ?? raw.closed_at)
+        : null,
   };
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { verifySignal } from "./verifier";
 import { setEngineConfig } from "../config/engineConfig";
 import type { Signal } from "@db/schema";
+import { getEffectiveSignalExpiry } from "@contracts/instruments";
 import type { Candle } from "./binance";
 
 function makeSignal(overrides: Partial<Signal> = {}): Signal {
@@ -485,7 +486,14 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
     const verdict = verifySignal(signal, []);
     expect(verdict.status).toBe("undecidable");
     expect(verdict.entryFilled).toBe(true);
-    expect(verdict.closedAt).toEqual(signal.expiresAt);
+    expect(verdict.closedAt).toEqual(
+      getEffectiveSignalExpiry(
+        signal.market,
+        signal.timeframe,
+        signal.openedAt,
+        signal.expiresAt
+      )
+    );
     expect(verifySignal(signal, [])).toEqual(verdict);
   });
 
