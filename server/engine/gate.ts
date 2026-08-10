@@ -10,6 +10,7 @@ import type { Setup } from "./strategy";
 
 export interface GateResult {
   pass: boolean;
+  /** Heuristic confluence score, retained as `confidence` for API compatibility. */
   confidence: number;
   reasons: string[];
 }
@@ -18,13 +19,13 @@ export interface GateResult {
 export const CONFIDENCE_FLOOR = 60;
 
 /**
- * Heuristic confidence 40–90 from confluence factors.
+ * Heuristic confluence score 40–90. This is not a calibrated probability.
  * (When the AI council ships, its score replaces this while the schema's
  * `engine` column records which one produced the signal.)
  */
 export function scoreSetup(
   setup: Setup,
-  options?: { ignoreVolume?: boolean },
+  options?: { ignoreVolume?: boolean }
 ): number {
   const { rsi, atrPct, regime, emaFast, emaSlow, rvol, distributionPullback } =
     setup.context;
@@ -37,12 +38,14 @@ export function scoreSetup(
   score += aligned ? 12 : -15;
 
   // Momentum not exhausted: RSI in the healthy half for the direction
-  if (setup.side === "buy") score += rsi >= 45 && rsi <= 65 ? 10 : rsi < 45 ? 2 : -6;
+  if (setup.side === "buy")
+    score += rsi >= 45 && rsi <= 65 ? 10 : rsi < 45 ? 2 : -6;
   else score += rsi >= 35 && rsi <= 55 ? 10 : rsi > 55 ? 2 : -6;
 
   // Volatility sweet spot: avoid dead and chaotic tapes
   if (atrPct >= 0.25 && atrPct <= 0.8) score += 10;
-  else if (atrPct < 0.15) score -= 12; // no movement, nothing to grade
+  else if (atrPct < 0.15)
+    score -= 12; // no movement, nothing to grade
   else if (atrPct > 0.9) score -= 8; // too wild, stop placement unreliable
 
   // Trend strength for trend setups
@@ -68,7 +71,8 @@ export function scoreSetup(
     if (setup.context.percentB != null) {
       // Overextended range boundaries bonus
       if (setup.side === "buy" && setup.context.percentB <= 0.15) score += 6;
-      else if (setup.side === "sell" && setup.context.percentB >= 0.85) score += 6;
+      else if (setup.side === "sell" && setup.context.percentB >= 0.85)
+        score += 6;
     }
   }
 
@@ -122,14 +126,25 @@ export function scoreSetup(
 export function gateSetup(
   setup: Setup,
   openSignalsExist: boolean,
-  options?: { ignoreVolume?: boolean; ignoreOffHours?: boolean; symbol?: string | null },
+  options?: {
+    ignoreVolume?: boolean;
+    ignoreOffHours?: boolean;
+    symbol?: string | null;
+  }
 ): GateResult {
   const reasons: string[] = [];
   const confidence = scoreSetup(setup, options);
   const isGold = options?.symbol === "XAUUSD" || options?.symbol === "PAXGUSDT";
-  const isForex = options?.symbol === "EURUSD" || options?.symbol === "GBPUSD" || options?.symbol === "EURUSDT" || options?.symbol === "GBPUSDT";
+  const isForex =
+    options?.symbol === "EURUSD" ||
+    options?.symbol === "GBPUSD" ||
+    options?.symbol === "EURUSDT" ||
+    options?.symbol === "GBPUSDT";
 
-  if (openSignalsExist) reasons.push("cooldown: an open signal already exists for this market/direction");
+  if (openSignalsExist)
+    reasons.push(
+      "cooldown: an open signal already exists for this market/direction"
+    );
 
   // Off-hours hard veto for 15m timeframe (Saturday/Sunday UTC or 21:00-00:00 UTC)
   if (!options?.ignoreOffHours) {
@@ -158,11 +173,16 @@ export function gateSetup(
     }
   }
 
-  if (!options?.ignoreVolume && setup.style === "trend" && setup.context.rvol < 0.5) {
+  if (
+    !options?.ignoreVolume &&
+    setup.style === "trend" &&
+    setup.context.rvol < 0.5
+  ) {
     reasons.push("thin-volume");
   }
 
-  if (confidence < CONFIDENCE_FLOOR) reasons.push(`confidence ${confidence} below floor ${CONFIDENCE_FLOOR}`);
+  if (confidence < CONFIDENCE_FLOOR)
+    reasons.push(`confluence ${confidence} below floor ${CONFIDENCE_FLOOR}`);
 
   const risk = Math.abs(setup.entry - setup.stopLoss);
   const reward1 = Math.abs(setup.tp1 - setup.entry);
@@ -171,9 +191,10 @@ export function gateSetup(
 
   const stopDistancePct = risk / setup.entry;
   const minStopPct = isGold ? 0.0015 : isForex ? 0.0003 : 0.0005;
-  if (stopDistancePct < minStopPct) reasons.push(`stop too tight — noise would grade it randomly`);
-  if (stopDistancePct > 0.08) reasons.push("stop wider than 8% — not a tradeable setup");
+  if (stopDistancePct < minStopPct)
+    reasons.push(`stop too tight — noise would grade it randomly`);
+  if (stopDistancePct > 0.08)
+    reasons.push("stop wider than 8% — not a tradeable setup");
 
   return { pass: reasons.length === 0, confidence, reasons };
 }
-

@@ -39,12 +39,12 @@ export function useSignals(filters?: SignalFilters): UseSignalsResult {
     {
       refetchInterval: 30_000,
       retry: 2,
-    },
+    }
   );
 
   const isFallbackNeeded = Boolean(
     trpcQuery.isError ||
-      (!trpcQuery.isLoading && (!trpcQuery.data || trpcQuery.data.length === 0)),
+    (!trpcQuery.isLoading && (!trpcQuery.data || trpcQuery.data.length === 0))
   );
 
   const supabaseFilters: SupabaseSignalFilters = useMemo(
@@ -55,14 +55,13 @@ export function useSignals(filters?: SignalFilters): UseSignalsResult {
       historyOnly: filters?.historyOnly,
       limit: filters?.limit ?? 100,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       isFallbackNeeded,
       filters?.symbol,
       filters?.status,
       filters?.historyOnly,
       filters?.limit,
-    ],
+    ]
   );
 
   const { supabaseSignals, isLoading: isSupabaseLoading } =

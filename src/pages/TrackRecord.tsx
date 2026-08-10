@@ -34,7 +34,12 @@ export default function TrackRecord() {
     document.title = "Verified Track Record — KR-Signal";
   }, []);
 
-  const { trackRecord: tr, funnel: funnelData, isLoading, source } = useTrackRecord();
+  const {
+    trackRecord: tr,
+    funnel: funnelData,
+    isLoading,
+    source,
+  } = useTrackRecord();
 
   const isSnapshotMode = source === "snapshot";
   const closedCount = tr?.closed ?? 0;
@@ -44,20 +49,20 @@ export default function TrackRecord() {
     !isSampleMeaningful || !tr || tr.closed === 0 || tr.winRate == null
       ? "neutral"
       : tr.winRate > 0.55
-      ? "green"
-      : tr.winRate >= 0.4
-      ? "amber"
-      : "red";
+        ? "green"
+        : tr.winRate >= 0.4
+          ? "amber"
+          : "red";
 
   const winRateSub =
     closedCount === 0
       ? "awaiting first outcomes"
       : !isSampleMeaningful
-      ? `n=${closedCount} · sample building (target n≥10)`
-      : `${tr?.wins} wins · ${tr?.nonWins} non-wins`;
+        ? `n=${closedCount} · sample building (target n≥10)`
+        : `${tr?.wins} wins · ${tr?.nonWins} non-wins`;
 
   const monthlyRows =
-    tr?.byMonth?.map((m) => ({
+    tr?.byMonth?.map(m => ({
       key: m.month,
       label: m.month,
       closed: m.closed,
@@ -66,7 +71,7 @@ export default function TrackRecord() {
     })) ?? [];
 
   const marketRows =
-    tr?.byMarket?.map((m) => ({
+    tr?.byMarket?.map(m => ({
       key: m.market,
       label: m.market,
       closed: m.closed,
@@ -95,13 +100,14 @@ export default function TrackRecord() {
 
         <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-400">
           Computed live from the public ledger. Only market-graded outcomes — a
-          take-profit, stop-loss or break-even actually touched on the candle tape —
-          enter these numbers. Expired setups never do.
+          take-profit, stop-loss or break-even actually touched on the candle
+          tape — enter these numbers. Expired setups never do.
         </p>
 
         {isSnapshotMode && (
           <p className="mt-3 text-xs text-zinc-500">
-            Live connection interrupted — showing a snapshot. Retrying automatically.
+            Live connection interrupted — showing a snapshot. Retrying
+            automatically.
           </p>
         )}
 
@@ -121,9 +127,10 @@ export default function TrackRecord() {
             {/* Empty state note */}
             {tr.closed === 0 && (
               <div className="mt-8 rounded-xl border border-dashed border-white/15 bg-white/[0.01] p-6 text-sm leading-relaxed text-zinc-400">
-                The ledger is young — no signal has been graded by the market tape yet.
-                These numbers fill in automatically as prices hit entry, target and stop levels.
-                An honest zero beats an invented hundred.
+                The ledger is young — no signal has been graded by the market
+                tape yet. These numbers fill in automatically as prices hit
+                entry, target and stop levels. An honest zero beats an invented
+                hundred.
               </div>
             )}
 
@@ -143,8 +150,14 @@ export default function TrackRecord() {
               <StatCard
                 label="Total R"
                 value={formatR(tr.totalR)}
-                sub={tr.avgR !== null ? `avg ${formatR(tr.avgR)} per trade` : undefined}
-                accent={tr.totalR > 0 ? "green" : tr.totalR < 0 ? "red" : "neutral"}
+                sub={
+                  tr.avgR !== null
+                    ? `avg ${formatR(tr.avgR)} per trade`
+                    : undefined
+                }
+                accent={
+                  tr.totalR > 0 ? "green" : tr.totalR < 0 ? "red" : "neutral"
+                }
               />
               <StatCard
                 label="Profit factor"
@@ -152,8 +165,8 @@ export default function TrackRecord() {
                   !isSampleMeaningful
                     ? "—"
                     : tr.profitFactor !== null
-                    ? tr.profitFactor.toFixed(2)
-                    : "—"
+                      ? tr.profitFactor.toFixed(2)
+                      : "—"
                 }
                 sub={
                   !isSampleMeaningful
@@ -170,7 +183,8 @@ export default function TrackRecord() {
               <EquityCurve points={tr.equityCurve} />
             ) : tr.closed > 0 && tr.closed < EQUITY_CURVE_MIN_TRADES ? (
               <div className="mt-8 rounded-xl border border-dashed border-white/15 bg-white/[0.01] p-5 text-sm text-zinc-400">
-                Equity curve appears after {EQUITY_CURVE_MIN_TRADES} graded trades.{" "}
+                Equity curve appears after {EQUITY_CURVE_MIN_TRADES} graded
+                trades.{" "}
                 <span className="text-zinc-300 font-medium">
                   {EQUITY_CURVE_MIN_TRADES - tr.closed} more to go.
                 </span>
@@ -198,7 +212,9 @@ export default function TrackRecord() {
         {/* Audit funnel visual */}
         {funnelData && (
           <div className="mt-10 rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-xs">
-            <h2 className="font-semibold text-white text-base">The Audit Funnel — Last 7 Days</h2>
+            <h2 className="font-semibold text-white text-base">
+              The Audit Funnel — Last 7 Days
+            </h2>
             <div className="mt-4 flex flex-wrap items-center gap-3 font-mono text-sm">
               <span className="rounded-lg border border-white/10 bg-black/30 px-3.5 py-2 text-zinc-200 tabular-nums">
                 {funnelData.scans} scans
@@ -213,8 +229,8 @@ export default function TrackRecord() {
               </span>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-              Most candidate setups fail our strict confidence and risk-geometry gates.
-              Scarcity and strict filtering protect signal quality.
+              Most candidate setups fail our strict confluence and risk-geometry
+              gates. Scarcity and strict filtering protect signal quality.
             </p>
           </div>
         )}

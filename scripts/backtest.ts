@@ -63,9 +63,11 @@ async function runBacktest(): Promise<void> {
   const variant = process.env.RULE_VARIANT || "chandelier";
   console.log(`\n=== KR-Signal Backtest Engine [Variant: ${variant}] ===\n`);
 
-  const rangeMode = variant === "touch" || variant === "baseline" ? "touch" : "sweep";
+  const rangeMode =
+    variant === "touch" || variant === "baseline" ? "touch" : "sweep";
   const squeezeBreakout = variant === "squeeze" || variant === "chandelier";
-  const trailMode = variant === "fixed" || variant === "baseline" ? "fixed" : "chandelier";
+  const trailMode =
+    variant === "fixed" || variant === "baseline" ? "fixed" : "chandelier";
 
   setEngineConfig({
     rangeMode,
@@ -73,20 +75,22 @@ async function runBacktest(): Promise<void> {
     trailMode,
   });
 
-
-
-
-  const cryptoInstruments = INSTRUMENTS.filter((i) =>
-    CRYPTO_SYMBOLS.includes(i.symbol),
+  const cryptoInstruments = INSTRUMENTS.filter(i =>
+    CRYPTO_SYMBOLS.includes(i.symbol)
   );
 
   const rows: ResultRow[] = [];
 
   for (const inst of cryptoInstruments) {
-    console.log(`Fetching 1000 klines for ${inst.symbol} across all timeframes...`);
+    console.log(
+      `Fetching 1000 klines for ${inst.symbol} across all timeframes...`
+    );
     const candleMap = new Map<Timeframe, Candle[]>();
     for (const tf of TIMEFRAMES) {
-      candleMap.set(tf, await fetchClosedKlines(inst.pair, tf, 1000));
+      candleMap.set(
+        tf,
+        await fetchClosedKlines(inst.pair, tf, 1000, inst.dataSource)
+      );
     }
 
     for (const tf of TIMEFRAMES) {
@@ -99,7 +103,15 @@ async function runBacktest(): Promise<void> {
 
       for (let i = WINDOW_SIZE - 1; i < candles.length; i++) {
         const windowCandles = candles.slice(i - WINDOW_SIZE + 1, i + 1);
-        const setup = generateSetup(windowCandles, tf, null, null, null, null, inst.symbol);
+        const setup = generateSetup(
+          windowCandles,
+          tf,
+          null,
+          null,
+          null,
+          null,
+          inst.symbol
+        );
         if (!setup) continue;
 
         setups++;
@@ -109,7 +121,7 @@ async function runBacktest(): Promise<void> {
           const targetHtf: Timeframe = htfTf;
           const setupCloseTime = candles[i].openTime + TF_MS[tf];
           const availableHtf = htfAllCandles.filter(
-            (c) => c.openTime + TF_MS[targetHtf] <= setupCloseTime,
+            c => c.openTime + TF_MS[targetHtf] <= setupCloseTime
           );
           if (isHtfVetoed(tf, setup.side, availableHtf)) {
             continue;
@@ -117,7 +129,7 @@ async function runBacktest(): Promise<void> {
         }
 
         // Check cooldown: is a setup with the same side currently open at candle i?
-        const isSameSideOpen = trades.some((t) => {
+        const isSameSideOpen = trades.some(t => {
           if (t.mockSignal.side !== setup.side) return false;
           const currentTape = candles.slice(t.setupIndex + 1, i + 1);
           const currentVerdict = verifySignal(t.mockSignal, currentTape);
@@ -125,9 +137,7 @@ async function runBacktest(): Promise<void> {
         });
 
         const ignoreVolume =
-          variant === "baseline" ||
-          variant === "mtf" ||
-          variant === "touch";
+          variant === "baseline" || variant === "mtf" || variant === "touch";
         const ignoreOffHours =
           variant === "baseline" ||
           variant === "mtf" ||
@@ -139,8 +149,6 @@ async function runBacktest(): Promise<void> {
           symbol: inst.symbol,
         });
         if (!gate.pass) continue;
-
-
 
         const mockSignal: Signal = {
           id: trades.length + 1,
@@ -155,6 +163,8 @@ async function runBacktest(): Promise<void> {
           tp2: setup.tp2,
           tp3: setup.tp3,
           confidence: gate.confidence,
+          strategyContext: setup.context,
+          engineConfigVersion: 1,
           status: "open",
           engine: "rules",
           entryFilled: false,
@@ -176,17 +186,17 @@ async function runBacktest(): Promise<void> {
         });
       }
 
-      const gradedTrades = trades.filter((t) =>
-        CLOSED_STATUSES.includes(t.verdict.status),
+      const gradedTrades = trades.filter(t =>
+        CLOSED_STATUSES.includes(t.verdict.status)
       );
       const graded = gradedTrades.length;
-      const wins = gradedTrades.filter((t) =>
-        WIN_STATUSES.includes(t.verdict.status),
+      const wins = gradedTrades.filter(t =>
+        WIN_STATUSES.includes(t.verdict.status)
       ).length;
       const winRate = graded > 0 ? (wins / graded) * 100 : 0;
       const totalR = gradedTrades.reduce(
         (sum, t) => sum + (t.verdict.rMultiple ?? 0),
-        0,
+        0
       );
       const avgR = graded > 0 ? totalR / graded : 0;
 
@@ -256,7 +266,7 @@ async function runBacktest(): Promise<void> {
   // Render Table
   console.log("\nBacktest Summary Results:");
   console.log(
-    "-----------------------------------------------------------------------------------------",
+    "-----------------------------------------------------------------------------------------"
   );
   console.log(
     "Symbol".padEnd(12) +
@@ -267,10 +277,10 @@ async function runBacktest(): Promise<void> {
       "Win Rate".padStart(12) +
       "Avg R".padStart(10) +
       "Total R".padStart(12) +
-      "Profit Factor".padStart(15),
+      "Profit Factor".padStart(15)
   );
   console.log(
-    "-----------------------------------------------------------------------------------------",
+    "-----------------------------------------------------------------------------------------"
   );
 
   for (const r of rows) {
@@ -283,12 +293,12 @@ async function runBacktest(): Promise<void> {
         formatPct(r.winRate).padStart(12) +
         formatR(r.avgR).padStart(10) +
         formatR(r.totalR).padStart(12) +
-        formatProfitFactor(r.profitFactor).padStart(15),
+        formatProfitFactor(r.profitFactor).padStart(15)
     );
   }
 
   console.log(
-    "-----------------------------------------------------------------------------------------",
+    "-----------------------------------------------------------------------------------------"
   );
   console.log(
     totalRow.symbol.padEnd(12) +
@@ -299,14 +309,14 @@ async function runBacktest(): Promise<void> {
       formatPct(totalRow.winRate).padStart(12) +
       formatR(totalRow.avgR).padStart(10) +
       formatR(totalRow.totalR).padStart(12) +
-      formatProfitFactor(totalRow.profitFactor).padStart(15),
+      formatProfitFactor(totalRow.profitFactor).padStart(15)
   );
   console.log(
-    "-----------------------------------------------------------------------------------------\n",
+    "-----------------------------------------------------------------------------------------\n"
   );
 }
 
-runBacktest().catch((err) => {
+runBacktest().catch(err => {
   console.error("Backtest failed:", err);
   process.exit(1);
 });

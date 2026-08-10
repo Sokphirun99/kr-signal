@@ -23,7 +23,7 @@ export function formatTelegramSetup(signal: ClientSignal): string {
     `📌 **Asset**: #${signal.symbol} (${inst?.name ?? signal.symbol})`,
     `⏱ **Timeframe**: ${signal.timeframe} | **Style**: ${signal.style.toUpperCase()}`,
     `📊 **Direction**: ${actionEmoji}`,
-    `🎯 **Confidence**: ${signal.confidence}% (${signal.engine === "rules" ? "Rule Engine" : "AI Council"})`,
+    `🎯 **Confluence score**: ${signal.confidence}/100 (${signal.engine === "rules" ? "Rule Engine" : "AI Council"}; not a win probability)`,
     `━━━━━━━━━━━━━━━━━━━━`,
     `📍 **Entry**: \`${formatPrice(signal.entry, decimals)}\``,
     `🛑 **Stop Loss**: \`${formatPrice(signal.stopLoss, decimals)}\``,
@@ -70,7 +70,7 @@ export function formatJsonSetup(signal: ClientSignal): string {
  */
 export async function copySetupToClipboard(
   signal: ClientSignal,
-  format: ExportFormat = "telegram",
+  format: ExportFormat = "telegram"
 ): Promise<boolean> {
   let content = "";
   let label = "Telegram format";
@@ -92,7 +92,7 @@ export async function copySetupToClipboard(
       description: `${label} copied to clipboard.`,
     });
     return true;
-  } catch (error) {
+  } catch {
     toast.error("Failed to copy", {
       description: "Clipboard permissions denied by browser.",
     });

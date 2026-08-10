@@ -7,6 +7,7 @@ import { signals, scanRuns, type Signal } from "@db/schema";
 import { and, desc, eq, ne, inArray, gte, lt, sql } from "drizzle-orm";
 import {
   CLOSED_STATUSES,
+  TERMINAL_STATUSES,
   INSTRUMENTS,
   type ClosedSignalRow,
   type SignalStatus,
@@ -59,7 +60,7 @@ export async function computeTrackRecord(): Promise<TrackRecord> {
   const validSignals = await db
     .select()
     .from(signals)
-    .where(and(inArray(signals.symbol, VALID_SYMBOLS), inArray(signals.status, CLOSED_STATUSES)));
+    .where(and(inArray(signals.symbol, VALID_SYMBOLS), inArray(signals.status, TERMINAL_STATUSES)));
 
   const closedRows: ClosedSignalRow[] = validSignals.map((s) => ({
     status: s.status as SignalStatus,

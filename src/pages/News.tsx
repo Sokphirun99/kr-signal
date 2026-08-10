@@ -39,7 +39,7 @@ export default function News() {
 
   const symbolOptions = useMemo(() => {
     if (marketCategory === "all") return INSTRUMENTS;
-    return INSTRUMENTS.filter((i) => i.market === marketCategory);
+    return INSTRUMENTS.filter(i => i.market === marketCategory);
   }, [marketCategory]);
 
   return (
@@ -52,7 +52,8 @@ export default function News() {
               Market news — context, not signals
             </h1>
             <p className="mt-2 max-w-2xl text-base text-zinc-400">
-              Headlines are third-party context only — they never influence signal publication or grading.
+              Headlines are third-party context only — they never influence
+              signal publication or grading.
             </p>
           </div>
         </div>
@@ -61,7 +62,10 @@ export default function News() {
         <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-300/90">
           <Info className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
           <p className="leading-relaxed">
-            KR-Signal executes a purely rules-based algorithmic engine. External news headlines, sentiment, and narratives are provided solely for trader awareness and never enter signal generation, stop calculation, or verified ledger grading.
+            KR-Signal executes a purely rules-based algorithmic engine. External
+            news headlines, sentiment, and narratives are provided solely for
+            trader awareness and never enter signal generation, stop
+            calculation, or verified ledger grading.
           </p>
         </div>
 
@@ -70,7 +74,7 @@ export default function News() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Market Category Pills */}
             <div className="flex flex-wrap gap-1">
-              {MARKETS.map((m) => (
+              {MARKETS.map(m => (
                 <button
                   key={m.id}
                   type="button"
@@ -82,7 +86,7 @@ export default function News() {
                     "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 cursor-pointer",
                     marketCategory === m.id
                       ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                      : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white",
+                      : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
                   )}
                 >
                   {m.label}
@@ -95,11 +99,13 @@ export default function News() {
               <span className="text-zinc-400 hidden sm:inline">Symbol:</span>
               <select
                 value={symbol ?? ""}
-                onChange={(e) => setSymbol(e.target.value ? e.target.value : undefined)}
+                onChange={e =>
+                  setSymbol(e.target.value ? e.target.value : undefined)
+                }
                 className="rounded-lg border border-white/10 bg-[#0c120e] px-3 py-1.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-hidden"
               >
                 <option value="">All symbols</option>
-                {symbolOptions.map((i) => (
+                {symbolOptions.map(i => (
                   <option key={i.symbol} value={i.symbol}>
                     {i.symbol} ({i.name})
                   </option>
@@ -115,13 +121,19 @@ export default function News() {
             <NewsListSkeleton />
           ) : isError ? (
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-10 text-center">
-              <p className="text-sm font-medium text-zinc-400">Unable to load news feed at this moment.</p>
+              <p className="text-sm font-medium text-zinc-400">
+                Unable to load news feed at this moment.
+              </p>
               <p className="mt-1 text-xs text-zinc-500">
-                The application will automatically retry fetching the headlines shortly.
+                The application will automatically retry fetching the headlines
+                shortly.
               </p>
             </div>
           ) : (
-            <NewsList items={news} />
+            <NewsList
+              key={`${marketCategory}:${symbol ?? "all"}`}
+              items={news}
+            />
           )}
         </div>
       </section>

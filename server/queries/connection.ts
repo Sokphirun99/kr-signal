@@ -44,9 +44,13 @@ export function getDb() {
       connect_timeout: 5,
       idle_timeout: 5,
       fetch_types: false,
+      connection: {
+        // A single stalled query must not consume the full Vercel function
+        // lifetime. Normal pipeline queries complete well below this limit.
+        statement_timeout: 30_000,
+      },
     });
     instance = drizzle(client, { schema });
   }
   return instance;
 }
-

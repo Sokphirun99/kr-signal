@@ -37,6 +37,8 @@ describe("publicApi REST v1", () => {
     tp2: 67800,
     tp3: 69200,
     confidence: 85,
+    strategyContext: null,
+    engineConfigVersion: 1,
     status: "tp1",
     engine: "rules",
     entryFilled: true,
@@ -166,9 +168,12 @@ describe("publicApi REST v1", () => {
       const bogusBody = (await bogusStatusRes.json()) as ApiResponse;
       expect(bogusBody.error?.code).toBe("BAD_REQUEST");
 
-      const bogusSymbolRes = await app.request("/api/v1/signals?symbol=UNKNOWN", {
-        headers: { "x-api-key": testApiKey },
-      });
+      const bogusSymbolRes = await app.request(
+        "/api/v1/signals?symbol=UNKNOWN",
+        {
+          headers: { "x-api-key": testApiKey },
+        }
+      );
       expect(bogusSymbolRes.status).toBe(400);
 
       const limitHighRes = await app.request("/api/v1/signals?limit=9999", {
@@ -183,11 +188,16 @@ describe("publicApi REST v1", () => {
     });
 
     it("passes valid filters to listSignals and sets Cache-Control header", async () => {
-      const listSpy = vi.spyOn(signalsQueries, "listSignals").mockResolvedValue([mockSignal]);
+      const listSpy = vi
+        .spyOn(signalsQueries, "listSignals")
+        .mockResolvedValue([mockSignal]);
 
-      const res = await app.request("/api/v1/signals?symbol=BTCUSDT&status=open&limit=25", {
-        headers: { "x-api-key": testApiKey },
-      });
+      const res = await app.request(
+        "/api/v1/signals?symbol=BTCUSDT&status=open&limit=25",
+        {
+          headers: { "x-api-key": testApiKey },
+        }
+      );
       expect(res.status).toBe(200);
       expect(res.headers.get("Cache-Control")).toBe("public, max-age=30");
       expect(listSpy).toHaveBeenCalledWith({
@@ -202,7 +212,7 @@ describe("publicApi REST v1", () => {
         async (id: number): Promise<Signal | null> => {
           if (id === 1) return mockSignal;
           return null;
-        },
+        }
       );
 
       const successRes = await app.request("/api/v1/signals/1", {
@@ -227,7 +237,9 @@ describe("publicApi REST v1", () => {
     });
 
     it("returns track record on GET /api/v1/track-record with Cache-Control", async () => {
-      vi.spyOn(signalsQueries, "computeTrackRecord").mockResolvedValue(mockTrackRecord);
+      vi.spyOn(signalsQueries, "computeTrackRecord").mockResolvedValue(
+        mockTrackRecord
+      );
 
       const res = await app.request("/api/v1/track-record", {
         headers: { "x-api-key": testApiKey },
@@ -247,7 +259,7 @@ describe("publicApi REST v1", () => {
       const body = (await res.json()) as ApiResponse<typeof INSTRUMENTS>;
       expect(body.data?.length).toBe(INSTRUMENTS.length);
       expect(body.meta?.count).toBe(INSTRUMENTS.length);
-      expect(body.data?.map((i) => i.symbol)).toContain("BTCUSDT");
+      expect(body.data?.map(i => i.symbol)).toContain("BTCUSDT");
     });
   });
 
@@ -264,7 +276,10 @@ describe("publicApi REST v1", () => {
     });
 
     it("statically verifies that publicApi routes NEVER import or reference ensureFresh", () => {
-      const publicApiFilePath = path.resolve(process.cwd(), "server/routes/publicApi.ts");
+      const publicApiFilePath = path.resolve(
+        process.cwd(),
+        "server/routes/publicApi.ts"
+      );
       const source = fs.readFileSync(publicApiFilePath, "utf-8");
       expect(source).not.toContain("ensureFresh");
       expect(source).not.toContain("forceRunPipelinePass");

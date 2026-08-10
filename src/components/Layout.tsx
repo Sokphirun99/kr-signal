@@ -1,10 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Menu, X, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GlowThreadsBackground from "@/components/GlowThreadsBackground";
 import TickerTape from "@/components/TickerTape";
-import { isAudioAlertsEnabled, toggleAudioAlerts, playSignalChime } from "@/utils/audioChime";
+import {
+  isAudioAlertsEnabled,
+  toggleAudioAlerts,
+  playSignalChime,
+} from "@/utils/audioChime";
 import { toast } from "sonner";
 
 const NAV = [
@@ -18,11 +22,7 @@ const NAV = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isAudioActive, setIsAudioActive] = useState(false);
-
-  useEffect(() => {
-    setIsAudioActive(isAudioAlertsEnabled());
-  }, []);
+  const [isAudioActive, setIsAudioActive] = useState(isAudioAlertsEnabled);
 
   const handleAudioToggle = () => {
     const nextState = toggleAudioAlerts();
@@ -52,7 +52,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070a08]/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link to="/" className="flex items-center gap-2.5 shrink-0 whitespace-nowrap group">
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 shrink-0 whitespace-nowrap group"
+          >
             <img
               src="/favicon.png"
               alt="KR-Signal Logo"
@@ -66,7 +69,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Right Actions: Desktop Nav & Sound Toggle */}
           <div className="flex items-center gap-3">
             <nav className="hidden md:flex items-center gap-1.5 text-sm">
-              {NAV.map((n) => (
+              {NAV.map(n => (
                 <Link
                   key={n.to}
                   to={n.to}
@@ -74,7 +77,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     "rounded-lg px-3.5 py-1.5 font-medium transition-all duration-150",
                     pathname === n.to
                       ? "bg-white/10 text-white shadow-xs"
-                      : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100",
+                      : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
                   )}
                 >
                   {n.label}
@@ -90,13 +93,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 "flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-200 cursor-pointer",
                 isAudioActive
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-sm shadow-emerald-500/10"
-                  : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200",
+                  : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
               )}
-              title={isAudioActive ? "Audio alerts enabled (Click to mute)" : "Enable live audio chimes"}
+              title={
+                isAudioActive
+                  ? "Audio alerts enabled (Click to mute)"
+                  : "Enable live audio chimes"
+              }
               aria-label="Toggle live audio alerts"
             >
-              {isAudioActive ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-              <span className="hidden sm:inline">{isAudioActive ? "Sound On" : "Muted"}</span>
+              {isAudioActive ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">
+                {isAudioActive ? "Sound On" : "Muted"}
+              </span>
             </button>
 
             {/* Mobile Menu Toggle Button */}
@@ -107,7 +120,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               aria-label="Toggle navigation menu"
               aria-expanded={mobileOpen}
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
@@ -116,7 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {mobileOpen && (
           <div className="border-b border-white/10 bg-[#0a0e0b] px-4 py-3 md:hidden">
             <nav className="flex flex-col gap-1 text-sm">
-              {NAV.map((n) => (
+              {NAV.map(n => (
                 <Link
                   key={n.to}
                   to={n.to}
@@ -125,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     "flex items-center justify-between rounded-lg px-3.5 py-2.5 font-medium transition-colors",
                     pathname === n.to
                       ? "bg-white/10 text-white"
-                      : "text-zinc-400 hover:bg-white/5 hover:text-white",
+                      : "text-zinc-400 hover:bg-white/5 hover:text-white"
                   )}
                 >
                   <span>{n.label}</span>
@@ -143,7 +160,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <TickerTape />
 
       {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-20">{children}</main>
+      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-20">
+        {children}
+      </main>
 
       {/* Expanded Multi-Column Footer */}
       <footer className="relative z-10 border-t border-white/10 bg-[#050706]/80 backdrop-blur-md py-12">
@@ -160,17 +179,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <span className="font-semibold text-white">KR-Signal</span>
               </div>
               <p className="text-xs leading-relaxed text-zinc-400">
-                Automated rule-based signal engine. Every setup published, every outcome graded on the market tape.
+                Automated rule-based signal engine. Every setup published, every
+                outcome graded on the market tape.
               </p>
             </div>
 
             {/* Col 2: Navigation */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Navigation</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Navigation
+              </h4>
               <ul className="mt-3 space-y-2 text-xs text-zinc-400">
-                {NAV.map((n) => (
+                {NAV.map(n => (
                   <li key={n.to}>
-                    <Link to={n.to} className="hover:text-emerald-400 transition-colors">
+                    <Link
+                      to={n.to}
+                      className="hover:text-emerald-400 transition-colors"
+                    >
                       {n.label}
                     </Link>
                   </li>
@@ -180,7 +205,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Col 3: Data & Market Notes */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Data Standards</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Data Standards
+              </h4>
               <ul className="mt-3 space-y-2 text-xs text-zinc-400 leading-relaxed">
                 <li>• Spot feeds via Binance API</li>
                 <li>• Gold proxy via PAXG/USDT</li>
@@ -191,16 +218,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Col 4: Ledger Commitment */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Ledger Guarantee</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Ledger Guarantee
+              </h4>
               <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-                No signal is ever edited or removed from the public ledger. Stopped-out setups stay in the win-rate denominator permanently.
+                No signal is ever edited or removed from the public ledger.
+                Stopped-out setups stay in the win-rate denominator permanently.
               </p>
             </div>
           </div>
 
           <div className="mt-10 border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
-            <p>© {new Date().getFullYear()} KR-Signal. Educational market research platform.</p>
-            <p className="text-zinc-500">Trading involves substantial financial risk.</p>
+            <p>
+              © {new Date().getFullYear()} KR-Signal. Educational market
+              research platform.
+            </p>
+            <p className="text-zinc-500">
+              Trading involves substantial financial risk.
+            </p>
           </div>
         </div>
       </footer>

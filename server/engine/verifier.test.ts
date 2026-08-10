@@ -19,6 +19,8 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
     tp2: 125,
     tp3: 140,
     confidence: 75,
+    strategyContext: null,
+    engineConfigVersion: 1,
     status: "open",
     engine: "rules",
     entryFilled: false,
@@ -40,8 +42,22 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   it("1. Normal Stop-Loss breach: exits at stop level with status 'sl'", () => {
     const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90 });
     const candles: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 98, high: 99, low: 88, close: 89, volume: 10 },
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 101,
+        high: 102,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 98,
+        high: 99,
+        low: 88,
+        close: 89,
+        volume: 10,
+      },
     ];
 
     const verdict = verifySignal(signal, candles);
@@ -54,8 +70,22 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   it("2. Gap-through Stop-Loss: candle opens beyond stop, exits at candle open", () => {
     const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90 });
     const candles: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 85, high: 88, low: 80, close: 82, volume: 10 }, // Gapped down to 85
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 101,
+        high: 102,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 85,
+        high: 88,
+        low: 80,
+        close: 82,
+        volume: 10,
+      }, // Gapped down to 85
     ];
 
     const verdict = verifySignal(signal, candles);
@@ -65,22 +95,63 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   });
 
   it("3. Break-Even after TP1: stop moves to entry, closes at 0R if hit", () => {
-    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115 });
+    const signal = makeSignal({
+      side: "buy",
+      entry: 100,
+      stopLoss: 90,
+      tp1: 115,
+    });
     const candles: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 100, high: 116, low: 100, close: 115, volume: 10 }, // TP1 hit!
-      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 114, high: 114, low: 98, close: 99, volume: 10 }, // Reversal to entry
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 101,
+        high: 102,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 100,
+        high: 116,
+        low: 100,
+        close: 115,
+        volume: 10,
+      }, // TP1 hit!
+      {
+        openTime: new Date("2026-01-01T03:00:00Z").getTime(),
+        open: 114,
+        high: 114,
+        low: 98,
+        close: 99,
+        volume: 10,
+      }, // Reversal to entry
     ];
 
     const verdict = verifySignal(signal, candles);
     expect(verdict.status).toBe("be");
     expect(verdict.exitPrice).toBe(100);
     expect(verdict.rMultiple).toBe(0);
+    expect(verdict.events.map(event => event.eventType)).toEqual([
+      "ENTRY_FILLED",
+      "TP1_HIT",
+      "STOP_MOVED_BE",
+      "CLOSED",
+    ]);
+    expect(new Set(verdict.events.map(event => event.eventKey)).size).toBe(
+      verdict.events.length
+    );
   });
 
   it("4. Chandelier Trail Breach after TP2: ratchets stop and closes with status 'tp2'", () => {
     setEngineConfig({ trailMode: "chandelier" });
-    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115, tp2: 125 });
+    const signal = makeSignal({
+      side: "buy",
+      entry: 100,
+      stopLoss: 90,
+      tp1: 115,
+      tp2: 125,
+    });
 
     // Generate 15 candles before setup to initialize ATR series cleanly
     const prefix: Candle[] = [];
@@ -97,11 +168,46 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
     }
 
     const tape: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 100, high: 116, low: 100, close: 115, volume: 10 }, // TP1
-      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 115, high: 126, low: 115, close: 125, volume: 10 }, // TP2
-      { openTime: new Date("2026-01-01T04:00:00Z").getTime(), open: 125, high: 139, low: 124, close: 138, volume: 10 }, // Push higher (below TP3 of 140)
-      { openTime: new Date("2026-01-01T05:00:00Z").getTime(), open: 138, high: 138, low: 110, close: 112, volume: 10 }, // Reversal breaching trail
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 101,
+        high: 102,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 100,
+        high: 116,
+        low: 100,
+        close: 115,
+        volume: 10,
+      }, // TP1
+      {
+        openTime: new Date("2026-01-01T03:00:00Z").getTime(),
+        open: 115,
+        high: 126,
+        low: 115,
+        close: 125,
+        volume: 10,
+      }, // TP2
+      {
+        openTime: new Date("2026-01-01T04:00:00Z").getTime(),
+        open: 125,
+        high: 139,
+        low: 124,
+        close: 138,
+        volume: 10,
+      }, // Push higher (below TP3 of 140)
+      {
+        openTime: new Date("2026-01-01T05:00:00Z").getTime(),
+        open: 138,
+        high: 138,
+        low: 110,
+        close: 112,
+        volume: 10,
+      }, // Reversal breaching trail
     ];
 
     const verdict = verifySignal(signal, [...prefix, ...tape]);
@@ -110,11 +216,37 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
   });
 
   it("5. Gap-through limit entry fill: candle opens below Buy entry price and fills", () => {
-    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115 });
+    const signal = makeSignal({
+      side: "buy",
+      entry: 100,
+      stopLoss: 90,
+      tp1: 115,
+    });
     const candles: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 95, high: 98, low: 93, close: 95, volume: 10 }, // Gapped open to 95 (below 100 entry), low 93 (above 90 SL)
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 95, high: 116, low: 95, close: 115, volume: 10 }, // TP1 hit (moves stop to BE)
-      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 114, high: 114, low: 98, close: 99, volume: 10 }, // Reversal to entry
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 95,
+        high: 98,
+        low: 93,
+        close: 95,
+        volume: 10,
+      }, // Gapped open to 95 (below 100 entry), low 93 (above 90 SL)
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 95,
+        high: 116,
+        low: 95,
+        close: 115,
+        volume: 10,
+      }, // TP1 hit (moves stop to BE)
+      {
+        openTime: new Date("2026-01-01T03:00:00Z").getTime(),
+        open: 114,
+        high: 114,
+        low: 98,
+        close: 99,
+        volume: 10,
+      }, // Reversal to entry
     ];
 
     const verdict = verifySignal(signal, candles);
@@ -124,17 +256,103 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
 
   it("6. TP3 Reachability under chandelier mode: exits at TP3 with status 'tp3'", () => {
     setEngineConfig({ trailMode: "chandelier" });
-    const signal = makeSignal({ side: "buy", entry: 100, stopLoss: 90, tp1: 115, tp2: 125, tp3: 140 });
+    const signal = makeSignal({
+      side: "buy",
+      entry: 100,
+      stopLoss: 90,
+      tp1: 115,
+      tp2: 125,
+      tp3: 140,
+    });
     const candles: Candle[] = [
-      { openTime: new Date("2026-01-01T01:00:00Z").getTime(), open: 101, high: 102, low: 99, close: 100, volume: 10 },
-      { openTime: new Date("2026-01-01T02:00:00Z").getTime(), open: 100, high: 116, low: 100, close: 115, volume: 10 }, // TP1
-      { openTime: new Date("2026-01-01T03:00:00Z").getTime(), open: 115, high: 126, low: 115, close: 125, volume: 10 }, // TP2
-      { openTime: new Date("2026-01-01T04:00:00Z").getTime(), open: 125, high: 142, low: 124, close: 141, volume: 10 }, // Touches & exceeds TP3 (140)
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 101,
+        high: 102,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 100,
+        high: 116,
+        low: 100,
+        close: 115,
+        volume: 10,
+      }, // TP1
+      {
+        openTime: new Date("2026-01-01T03:00:00Z").getTime(),
+        open: 115,
+        high: 126,
+        low: 115,
+        close: 125,
+        volume: 10,
+      }, // TP2
+      {
+        openTime: new Date("2026-01-01T04:00:00Z").getTime(),
+        open: 125,
+        high: 142,
+        low: 124,
+        close: 141,
+        volume: 10,
+      }, // Touches & exceeds TP3 (140)
     ];
 
     const verdict = verifySignal(signal, candles);
     expect(verdict.status).toBe("tp3");
     expect(verdict.exitPrice).toBe(140);
     expect(verdict.rMultiple).toBe(4.0);
+  });
+
+  it("expires before evaluating a candle that starts after the deadline", () => {
+    const signal = makeSignal({
+      entryFilled: true,
+      expiresAt: new Date("2026-01-01T02:00:00Z"),
+    });
+    const candles: Candle[] = [
+      {
+        openTime: new Date("2026-01-01T03:00:00Z").getTime(),
+        open: 120,
+        high: 145,
+        low: 110,
+        close: 140,
+        volume: 10,
+      },
+    ];
+
+    const verdict = verifySignal(signal, candles);
+    expect(verdict.status).toBe("expired");
+    expect(verdict.exitPrice).toBeNull();
+    expect(verdict.rMultiple).toBeNull();
+  });
+
+  it("reconstructs entry order instead of counting a pre-entry target", () => {
+    const signal = makeSignal({
+      entryFilled: true,
+      expiresAt: new Date("2027-01-01T00:00:00Z"),
+    });
+    const candles: Candle[] = [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 120,
+        high: 141,
+        low: 110,
+        close: 130,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 105,
+        high: 106,
+        low: 99,
+        close: 101,
+        volume: 10,
+      },
+    ];
+
+    const verdict = verifySignal(signal, candles);
+    expect(verdict.status).toBe("open");
+    expect(verdict.entryFilled).toBe(true);
   });
 });

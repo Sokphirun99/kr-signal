@@ -2,7 +2,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "../middleware";
 import { ensureFresh } from "../engine/pipeline";
-import { listSignals, computeTrackRecord, computeFunnel } from "../queries/signals";
+import {
+  listSignals,
+  computeTrackRecord,
+  computeFunnel,
+} from "../queries/signals";
 import { fetchAllTickers, fetchClosedKlines } from "../engine/binance";
 import { generateSetup } from "../engine/strategy";
 import { gateSetup } from "../engine/gate";
@@ -17,16 +21,27 @@ export const signalsRouter = createRouter({
         .object({
           symbol: z.string().nullish(),
           status: z
-            .enum(["open", "tp1", "tp2", "tp3", "sl", "be", "expired", "undecidable"])
+            .enum([
+              "open",
+              "tp1",
+              "tp2",
+              "tp3",
+              "sl",
+              "be",
+              "expired",
+              "undecidable",
+            ])
             .nullish(),
           closedOnly: z.boolean().nullish(),
           historyOnly: z.boolean().nullish(),
           limit: z.number().min(1).max(500).nullish(),
         })
-        .nullish(),
+        .nullish()
     )
     .query(async ({ input }) => {
-      await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
+      await ensureFresh().catch(err =>
+        console.error("ensureFresh error:", err)
+      );
       try {
         return await listSignals({
           symbol: input?.symbol ?? undefined,
@@ -47,7 +62,7 @@ export const signalsRouter = createRouter({
 
   /** Verified track record — computed only from market-graded outcomes */
   trackRecord: publicQuery.query(async () => {
-    await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
+    await ensureFresh().catch(err => console.error("ensureFresh error:", err));
     try {
       return await computeTrackRecord();
     } catch (err) {
@@ -62,7 +77,7 @@ export const signalsRouter = createRouter({
 
   /** Audit funnel: scanned → candidate → published over the last 7 days */
   funnel: publicQuery.query(async () => {
-    await ensureFresh().catch((err) => console.error("ensureFresh error:", err));
+    await ensureFresh().catch(err => console.error("ensureFresh error:", err));
     try {
       return await computeFunnel(7);
     } catch (err) {
@@ -82,26 +97,38 @@ export const signalsRouter = createRouter({
   analysis: publicQuery
     .input(
       z.object({
-        symbol: z.string().refine(
-          (symbol) => INSTRUMENTS.some((instrument) => instrument.symbol === symbol),
-          "Unsupported instrument",
-        ),
+        symbol: z
+          .string()
+          .refine(
+            symbol =>
+              INSTRUMENTS.some(instrument => instrument.symbol === symbol),
+            "Unsupported instrument"
+          ),
         timeframe: z.enum(TIMEFRAMES),
-      }),
+      })
     )
     .query(async ({ input }) => {
-      const instrument = INSTRUMENTS.find((item) => item.symbol === input.symbol);
+      const instrument = INSTRUMENTS.find(item => item.symbol === input.symbol);
       if (!instrument) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported instrument." });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Unsupported instrument.",
+        });
       }
 
       try {
-        const candles = await fetchClosedKlines(instrument.pair, input.timeframe, 300);
+        const candles = await fetchClosedKlines(
+          instrument.pair,
+          input.timeframe,
+          300,
+          instrument.dataSource
+        );
         const analysis = analyzeTechnicalData(candles);
         if (!analysis) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: "Not enough closed candles to calculate technical analysis.",
+            message:
+              "Not enough closed candles to calculate technical analysis.",
           });
         }
 
@@ -144,9 +171,11 @@ export const signalsRouter = createRouter({
   /** Live ticker tape across all instruments */
   ticker: publicQuery.query(async () => {
     try {
-      const tickers = await fetchAllTickers(INSTRUMENTS.map((i) => i.pair));
-      return INSTRUMENTS.map((inst) => {
-        const t = tickers.find((x) => x.pair === inst.pair);
+      const tickers = await fetchAllTickers(
+        INSTRUMENTS.map(i => ({ pair: i.pair, source: i.dataSource }))
+      );
+      return INSTRUMENTS.map(inst => {
+        const t = tickers.find(x => x.pair === inst.pair);
         return {
           symbol: inst.symbol,
           name: inst.name,
@@ -159,7 +188,7 @@ export const signalsRouter = createRouter({
         };
       });
     } catch {
-      return INSTRUMENTS.map((inst) => ({
+      return INSTRUMENTS.map(inst => ({
         symbol: inst.symbol,
         name: inst.name,
         market: inst.market,

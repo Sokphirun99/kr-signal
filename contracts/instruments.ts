@@ -1,8 +1,9 @@
 /**
  * KR-Signal — instrument registry shared between frontend and backend.
  *
- * Data source note: every instrument is resolved through Binance spot pairs
- * (data-api.binance.vision). Gold and forex instruments are proxies:
+ * Data source note: crypto instruments use Binance USD-M Futures so their
+ * candles/tickers match the futures funding, OI, and taker inputs. Gold and
+ * forex instruments remain Binance Spot proxies:
  *   - Gold  → PAXG/USDT  (PAX Gold token, ~1:1 with one troy oz of gold)
  *   - EURUSD → EUR/USDT  (USDT ≈ USD, small stablecoin basis)
  *   - GBPUSD → GBP/USDT
@@ -13,16 +14,22 @@ export type Market = "crypto" | "gold" | "forex";
 export type Timeframe = "15m" | "1h" | "4h";
 export type TradeSide = "buy" | "sell";
 export type StrategyStyle = "trend" | "range";
+export type MarketDataSource = "futures" | "spot";
 
 export type SignalStatus =
-  | "open"
-  | "tp1"
-  | "tp2"
-  | "tp3"
-  | "sl"
-  | "be"
-  | "expired"
-  | "undecidable";
+  "open" | "tp1" | "tp2" | "tp3" | "sl" | "be" | "expired" | "undecidable";
+
+/**
+ * Ledger status semantics are terminal, not progressive:
+ * - `open` means the trade is still being evaluated.
+ * - `tp2` means a chandelier stop closed the trade after TP2 was reached.
+ * - `tp3`, `sl`, and `be` describe the realized exit.
+ * - `expired` and `undecidable` are ungraded terminal outcomes.
+ *
+ * `tp1` remains in the persisted enum for backward compatibility, but the
+ * current no-partial-exit execution model does not emit it. Target touches
+ * before the terminal exit are reconstructed from candle history.
+ */
 
 export type EngineLabel = "rules" | "ai";
 
@@ -32,8 +39,10 @@ export interface Instrument {
   /** Display name, e.g. "Bitcoin" */
   name: string;
   market: Market;
-  /** Binance spot pair used for klines/ticker */
+  /** Binance symbol used for klines/ticker */
   pair: string;
+  /** Binance product whose OHLC/ticker tape is authoritative for this instrument */
+  dataSource: MarketDataSource;
   /** Price display decimals */
   decimals: number;
   /** Shown to users when the feed is a proxy */
@@ -41,13 +50,28 @@ export interface Instrument {
 }
 
 export const INSTRUMENTS: Instrument[] = [
-  { symbol: "BTCUSDT", name: "Bitcoin", market: "crypto", pair: "BTCUSDT", decimals: 1 },
-  { symbol: "ETHUSDT", name: "Ethereum", market: "crypto", pair: "ETHUSDT", decimals: 2 },
+  {
+    symbol: "BTCUSDT",
+    name: "Bitcoin",
+    market: "crypto",
+    pair: "BTCUSDT",
+    dataSource: "futures",
+    decimals: 1,
+  },
+  {
+    symbol: "ETHUSDT",
+    name: "Ethereum",
+    market: "crypto",
+    pair: "ETHUSDT",
+    dataSource: "futures",
+    decimals: 2,
+  },
   {
     symbol: "XAUUSD",
     name: "Gold",
     market: "gold",
     pair: "PAXGUSDT",
+    dataSource: "spot",
     decimals: 2,
     basisNote: "PAXG/USDT proxy — tracks spot gold with a small token basis",
   },
@@ -56,6 +80,7 @@ export const INSTRUMENTS: Instrument[] = [
     name: "Euro / US Dollar",
     market: "forex",
     pair: "EURUSDT",
+    dataSource: "spot",
     decimals: 4,
     basisNote: "EUR/USDT proxy — tracks EUR/USD with a small stablecoin basis",
   },
@@ -64,6 +89,7 @@ export const INSTRUMENTS: Instrument[] = [
     name: "Pound / US Dollar",
     market: "forex",
     pair: "GBPUSDT",
+    dataSource: "spot",
     decimals: 4,
     basisNote: "GBP/USDT proxy — tracks GBP/USD with a small stablecoin basis",
   },
@@ -86,13 +112,26 @@ export const EXPIRY_MS: Record<Timeframe, number> = {
 };
 
 /** Statuses that count as a market-graded (closed) outcome */
-export const CLOSED_STATUSES: SignalStatus[] = ["tp1", "tp2", "tp3", "sl", "be"];
+export const CLOSED_STATUSES: SignalStatus[] = [
+  "tp1",
+  "tp2",
+  "tp3",
+  "sl",
+  "be",
+];
+
+/** Every terminal status, including outcomes excluded from performance grading. */
+export const TERMINAL_STATUSES: SignalStatus[] = [
+  ...CLOSED_STATUSES,
+  "expired",
+  "undecidable",
+];
 
 /** Statuses that count as wins for the win-rate formula */
 export const WIN_STATUSES: SignalStatus[] = ["tp1", "tp2", "tp3"];
 
 export function getInstrument(symbol: string): Instrument | undefined {
-  return INSTRUMENTS.find((i) => i.symbol === symbol);
+  return INSTRUMENTS.find(i => i.symbol === symbol);
 }
 
 export function formatPrice(price: number, decimals: number): string {
@@ -159,6 +198,8 @@ export interface ClientSignal {
   tp2: number;
   tp3: number;
   confidence: number;
+  strategyContext?: Record<string, unknown> | null;
+  engineConfigVersion?: number;
   status: string;
   engine: string;
   entryFilled: boolean;

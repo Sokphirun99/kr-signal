@@ -1,7 +1,10 @@
 /**
  * Binance market-data adapter.
- * Uses the public market-data host (no API key required).
+ * Crypto uses USD-M Futures; proxy instruments use Spot. Both are public
+ * market-data APIs and require no API key.
  */
+
+import type { MarketDataSource } from "@contracts/instruments";
 
 const TIMEOUT_MS = 10_000;
 
@@ -23,19 +26,25 @@ export interface Ticker24h {
   quoteVolume: number;
 }
 
-const BASE_HOSTS = [
+const SPOT_HOSTS = [
   "https://data-api.binance.vision",
   "https://api.binance.com",
 ];
+const FUTURES_HOSTS = ["https://fapi.binance.com"];
 
-async function fetchJson<T>(path: string): Promise<T> {
+async function fetchJson<T>(
+  source: MarketDataSource,
+  path: string
+): Promise<T> {
   let lastErr: unknown;
-  for (const host of BASE_HOSTS) {
+  const hosts = source === "futures" ? FUTURES_HOSTS : SPOT_HOSTS;
+  for (const host of hosts) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const res = await fetch(`${host}${path}`, { signal: controller.signal });
-      if (!res.ok) throw new Error(`Binance HTTP ${res.status} for ${host}${path}`);
+      if (!res.ok)
+        throw new Error(`Binance HTTP ${res.status} for ${host}${path}`);
       return (await res.json()) as T;
     } catch (err) {
       lastErr = err;
@@ -47,7 +56,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 }
 
 /**
- * Fetch klines for a spot pair. Returns ascending candles.
+ * Fetch ascending klines from the selected Binance product.
  * `limit` max 1000. The last candle may still be forming — callers that
  * need closed candles only should drop it (see fetchClosedKlines).
  */
@@ -55,11 +64,13 @@ export async function fetchKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
+  source: MarketDataSource = "spot"
 ): Promise<Candle[]> {
   const raw = await fetchJson<unknown[][]>(
-    `/api/v3/klines?symbol=${pair}&interval=${interval}&limit=${limit}`,
+    source,
+    `${source === "futures" ? "/fapi/v1/klines" : "/api/v3/klines"}?symbol=${pair}&interval=${interval}&limit=${limit}`
   );
-  return raw.map((k) => ({
+  return raw.map(k => ({
     openTime: Number(k[0]),
     open: Number(k[1]),
     high: Number(k[2]),
@@ -82,17 +93,18 @@ export async function fetchClosedKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
+  source: MarketDataSource = "spot"
 ): Promise<Candle[]> {
-  const cacheKey = `${pair}:${interval}:${limit}`;
+  const cacheKey = `${source}:${pair}:${interval}:${limit}`;
   const cached = klineCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_TTL_MS) {
     return cached.candles;
   }
 
-  const candles = await fetchKlines(pair, interval, limit);
+  const candles = await fetchKlines(pair, interval, limit, source);
   const tfMs = { "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000 }[interval];
   const now = Date.now();
-  const closed = candles.filter((c) => c.openTime + tfMs <= now);
+  const closed = candles.filter(c => c.openTime + tfMs <= now);
 
   klineCache.set(cacheKey, { candles: closed, fetchedAt: Date.now() });
   return closed;
@@ -103,21 +115,26 @@ export async function fetchActiveKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
+  source: MarketDataSource = "spot"
 ): Promise<Candle[]> {
-  const cacheKey = `active:${pair}:${interval}:${limit}`;
+  const cacheKey = `active:${source}:${pair}:${interval}:${limit}`;
   const cached = klineCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < 5_000) {
     return cached.candles;
   }
 
-  const candles = await fetchKlines(pair, interval, limit);
+  const candles = await fetchKlines(pair, interval, limit, source);
   klineCache.set(cacheKey, { candles, fetchedAt: Date.now() });
   return candles;
 }
 
-export async function fetchTicker24h(pair: string): Promise<Ticker24h> {
+export async function fetchTicker24h(
+  pair: string,
+  source: MarketDataSource = "spot"
+): Promise<Ticker24h> {
   const raw = await fetchJson<Record<string, string>>(
-    `/api/v3/ticker/24hr?symbol=${pair}`,
+    source,
+    `${source === "futures" ? "/fapi/v1/ticker/24hr" : "/api/v3/ticker/24hr"}?symbol=${pair}`
   );
   return {
     pair,
@@ -128,28 +145,15 @@ export async function fetchTicker24h(pair: string): Promise<Ticker24h> {
   };
 }
 
-export async function fetchAllTickers(pairs: string[]): Promise<Ticker24h[]> {
-  try {
-    const encodedSymbols = encodeURIComponent(JSON.stringify(pairs));
-    const raw = await fetchJson<Record<string, string>[]>(
-      `/api/v3/ticker/24hr?symbols=${encodedSymbols}`,
-    );
-    if (Array.isArray(raw)) {
-      return raw.map((t) => ({
-        pair: String(t.symbol),
-        lastPrice: Number(t.lastPrice),
-        priceChangePct: Number(t.priceChangePercent),
-        volume: Number(t.volume),
-        quoteVolume: Number(t.quoteVolume),
-      }));
-    }
-  } catch {
-    // Fall back to individual ticker fetches
-  }
-
-  const results = await Promise.allSettled(pairs.map((p) => fetchTicker24h(p)));
+export async function fetchAllTickers(
+  requests: Array<{ pair: string; source: MarketDataSource }>
+): Promise<Ticker24h[]> {
+  const results = await Promise.allSettled(
+    requests.map(({ pair, source }) => fetchTicker24h(pair, source))
+  );
   return results
-    .filter((r): r is PromiseFulfilledResult<Ticker24h> => r.status === "fulfilled")
-    .map((r) => r.value);
+    .filter(
+      (r): r is PromiseFulfilledResult<Ticker24h> => r.status === "fulfilled"
+    )
+    .map(r => r.value);
 }
-

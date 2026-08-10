@@ -6,32 +6,38 @@ const QUICK_RULES = [
   {
     label: "Confidence Floor",
     value: "60%",
-    tooltip: "Candidates must score ≥60% algorithmic confidence to clear the gate and publish.",
+    tooltip:
+      "Candidates need a confluence score of at least 60 to clear the gate. It is not a win probability.",
   },
   {
     label: "Minimum Target",
     value: "≥ 1.4R",
-    tooltip: "Target 1 must yield at least 1.4× the risk distance (R) before publishing.",
+    tooltip:
+      "Target 1 must yield at least 1.4× the risk distance (R) before publishing.",
   },
   {
     label: "Same-Candle Rule",
     value: "Stop First",
-    tooltip: "If TP & SL are hit inside the same candle, counted conservatively as Stop-loss first.",
+    tooltip:
+      "If TP & SL are hit inside the same candle, counted conservatively as Stop-loss first.",
   },
   {
     label: "Gap-Through",
     value: "Graded at Open",
-    tooltip: "If market gaps past a stop price, trade exit is graded at the candle's open price.",
+    tooltip:
+      "If market gaps past a stop price, trade exit is graded at the candle's open price.",
   },
   {
     label: "After TP1",
     value: "Break-Even",
-    tooltip: "Once Target 1 is touched, stop-loss automatically moves to entry price (0R risk).",
+    tooltip:
+      "Once Target 1 is touched, stop-loss automatically moves to entry price (0R risk).",
   },
   {
     label: "After TP2",
     value: "2.5× ATR Trail",
-    tooltip: "Once Target 2 is touched, a dynamic 2.5× ATR trailing stop locks in trend profit.",
+    tooltip:
+      "Once Target 2 is touched, a dynamic 2.5× ATR trailing stop locks in trend profit.",
   },
 ];
 
@@ -40,7 +46,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     title: "What gets published",
     body: [
       "The engine scans every covered instrument on the 15m, 1h and 4h timeframes. A scan only becomes a candidate when the strategy finds a complete setup: entry, stop-loss and three targets, with geometry that makes sense.",
-      "A candidate only publishes if it clears the gate: a confidence floor of 60, a first target of at least 1.4R, stop distance within sane bounds, and no open signal already running for that market and direction. Most candidates fail — that is intentional.",
+      "A candidate only publishes if it clears the gate: a confluence-score floor of 60, a first target of at least 1.4R, stop distance within sane bounds, and no open signal already running for that market and direction. The score measures rule agreement, not the probability of winning.",
     ],
   },
   {
@@ -70,7 +76,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "The rule engine, today",
     body: [
-      "Every signal currently carries the “Rule engine” label: deterministic strategy plus heuristic confidence scoring. An AI council — multi-model review of each candidate — is on the roadmap; when it ships, signals it produces will carry their own label and rule-engine rows will stay visible and separately counted.",
+      "Every signal currently carries the “Rule engine” label: deterministic strategy plus heuristic confluence scoring. The stored score is not presented as a calibrated win probability. Any future model-produced signals will keep a separate engine label and track record.",
     ],
   },
 ];
@@ -90,7 +96,8 @@ export default function Methodology() {
           Engine methodology & rules
         </h1>
         <p className="mt-2 max-w-2xl text-base text-zinc-400 leading-relaxed">
-          The counting rules behind every number on our track record page — written down in detail so the record can be independently checked.
+          The counting rules behind every number on our track record page —
+          written down in detail so the record can be independently checked.
         </p>
 
         {/* Quick Rules at a Glance Strip */}
@@ -99,7 +106,7 @@ export default function Methodology() {
             Rules at a Glance
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 font-mono text-xs">
-            {QUICK_RULES.map((r) => (
+            {QUICK_RULES.map(r => (
               <div
                 key={r.label}
                 className="group relative rounded-lg border border-white/10 bg-black/40 p-2.5 transition-colors hover:border-emerald-500/40 hover:bg-black/60 cursor-help"
@@ -111,7 +118,9 @@ export default function Methodology() {
                   </span>
                   <Info className="h-3 w-3 shrink-0 text-zinc-500 transition-colors group-hover:text-emerald-400" />
                 </div>
-                <span className="mt-1 block font-bold text-emerald-300 tabular-nums">{r.value}</span>
+                <span className="mt-1 block font-bold text-emerald-300 tabular-nums">
+                  {r.value}
+                </span>
                 <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 w-48 rounded-md border border-zinc-800 bg-zinc-900 p-2 text-[11px] font-sans text-zinc-300 shadow-xl group-hover:block z-20">
                   {r.tooltip}
                   <div className="absolute top-full left-1/2 -ml-1 border-4 border-transparent border-t-zinc-900" />
@@ -123,14 +132,17 @@ export default function Methodology() {
 
         {/* Detailed Sections */}
         <div className="mt-10 grid gap-6">
-          {SECTIONS.map((s) => (
+          {SECTIONS.map(s => (
             <article
               key={s.title}
               className="rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-xs"
             >
               <h2 className="text-lg font-semibold text-white">{s.title}</h2>
               {s.body.map((p, i) => (
-                <p key={i} className="mt-3 text-sm leading-relaxed text-zinc-400">
+                <p
+                  key={i}
+                  className="mt-3 text-sm leading-relaxed text-zinc-400"
+                >
                   {p}
                 </p>
               ))}
@@ -140,13 +152,18 @@ export default function Methodology() {
           {/* Developers & Public API Section */}
           <article className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-6 shadow-xs">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-white">Developers & Public REST API</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Developers & Public REST API
+              </h2>
               <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-mono font-medium text-emerald-400">
                 v1 REST API
               </span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-              External trading systems, quantitative researchers, and charting tools can consume our immutable signal ledgers, historical track records, and covered instrument definitions directly via our high-performance read-only REST API.
+              External trading systems, quantitative researchers, and charting
+              tools can consume our immutable signal ledgers, historical track
+              records, and covered instrument definitions directly via our
+              high-performance read-only REST API.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs font-mono">
               <div className="rounded-lg border border-white/10 bg-black/40 p-3">
@@ -157,10 +174,19 @@ export default function Methodology() {
                 <p className="text-emerald-300">/api/v1/instruments</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/40 p-3">
-                <span className="text-zinc-500">Rate Limiting & Authentication:</span>
-                <p className="mt-1 text-zinc-300">Auth: <code className="text-emerald-300">x-api-key</code> header</p>
-                <p className="text-zinc-300">Limit: 60 req/min per key (sliding window)</p>
-                <p className="text-zinc-300">Safety: Pure DB reads (no pipeline writes)</p>
+                <span className="text-zinc-500">
+                  Rate Limiting & Authentication:
+                </span>
+                <p className="mt-1 text-zinc-300">
+                  Auth: <code className="text-emerald-300">x-api-key</code>{" "}
+                  header
+                </p>
+                <p className="text-zinc-300">
+                  Limit: 60 req/min per key (sliding window)
+                </p>
+                <p className="text-zinc-300">
+                  Safety: Pure DB reads (no pipeline writes)
+                </p>
               </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs">

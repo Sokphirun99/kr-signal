@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/utils/supabase";
 import type { ClientSignal, ClosedSignalRow } from "@contracts/instruments";
-import { INSTRUMENTS, formatPrice, getInstrument } from "@contracts/instruments";
+import {
+  CLOSED_STATUSES,
+  INSTRUMENTS,
+  formatPrice,
+  getInstrument,
+} from "@contracts/instruments";
 import { computeTrackRecordFromSignals } from "@contracts/trackRecord";
 import { playSignalChime } from "@/utils/audioChime";
 import { toast } from "sonner";
 
-const VALID_SYMBOLS = INSTRUMENTS.map((i) => i.symbol);
+const VALID_SYMBOLS = INSTRUMENTS.map(i => i.symbol);
 const DEFAULT_SIGNAL_LIMIT = 100;
 const BASE_POLL_INTERVAL_MS = 15_000;
 const POLL_JITTER_MAX_MS = 3_000;
@@ -31,7 +36,7 @@ export interface SupabaseSignalFilters {
  * Failure modes: returns zeroed metrics on empty input.
  */
 export function computeTrackFromSignals(signals: ClientSignal[]) {
-  const mapped: ClosedSignalRow[] = signals.map((s) => {
+  const mapped: ClosedSignalRow[] = signals.map(s => {
     const raw = s as unknown as Record<string, unknown>;
     return {
       status: (raw.status ?? "open") as ClosedSignalRow["status"],
@@ -80,7 +85,7 @@ function buildSignalsQuery(filters?: SupabaseSignalFilters) {
     return q.neq("status", "open");
   }
   if (filters?.closedOnly) {
-    return q.not("status", "in", "(open,expired)");
+    return q.in("status", CLOSED_STATUSES);
   }
   if (filters?.status && filters.status !== "all") {
     return q.eq("status", filters.status);
@@ -99,6 +104,11 @@ function buildSignalsQuery(filters?: SupabaseSignalFilters) {
 export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
   const [supabaseSignals, setSupabaseSignals] = useState<ClientSignal[]>([]);
   const isEnabled = filters?.enabled ?? true;
+  const symbol = filters?.symbol;
+  const status = filters?.status;
+  const closedOnly = filters?.closedOnly;
+  const historyOnly = filters?.historyOnly;
+  const limit = filters?.limit;
   const [isLoading, setIsLoading] = useState<boolean>(isEnabled);
   const inFlightRef = useRef<boolean>(false);
   const fingerprintRef = useRef<string>(DEFAULT_FINGERPRINT);
@@ -119,7 +129,13 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       inFlightRef.current = true;
       if (isInitial) setIsLoading(true);
       try {
-        const { data, error } = await buildSignalsQuery(filters);
+        const { data, error } = await buildSignalsQuery({
+          symbol,
+          status,
+          closedOnly,
+          historyOnly,
+          limit,
+        });
         if (isMounted && data && !error) {
           const nextSignals = data as unknown as ClientSignal[];
           const nextFingerprint = computeSignalFingerprint(nextSignals);
@@ -183,14 +199,17 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "signals" },
-        (payload) => {
+        payload => {
           scheduleDebouncedFetch();
 
           const record = (payload.new ?? {}) as Record<string, unknown>;
           const symbol = String(record.symbol ?? "");
           const inst = getInstrument(symbol);
           const decimals = inst?.decimals ?? 2;
-          const entry = typeof record.entry === "number" ? formatPrice(record.entry, decimals) : String(record.entry ?? "");
+          const entry =
+            typeof record.entry === "number"
+              ? formatPrice(record.entry, decimals)
+              : String(record.entry ?? "");
 
           if (payload.eventType === "INSERT" && symbol) {
             const side = String(record.side ?? "buy").toUpperCase();
@@ -203,9 +222,14 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
             if (status === "tp1" || status === "tp2" || status === "tp3") {
               const rMult = record.rMultiple ?? record.r_multiple;
               playSignalChime("take_profit");
-              toast.success(`🎯 Take Profit Hit: ${symbol} (${status.toUpperCase()})`, {
-                description: rMult ? `Trade closed with +${Number(rMult).toFixed(2)}R gain` : `Take profit target reached!`,
-              });
+              toast.success(
+                `🎯 Take Profit Hit: ${symbol} (${status.toUpperCase()})`,
+                {
+                  description: rMult
+                    ? `Trade closed with +${Number(rMult).toFixed(2)}R gain`
+                    : `Take profit target reached!`,
+                }
+              );
             } else if (status === "sl") {
               playSignalChime("stop_loss");
               toast.error(`🛑 Stop Loss Hit: ${symbol}`, {
@@ -213,9 +237,9 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
               });
             }
           }
-        },
+        }
       )
-      .subscribe((status) => {
+      .subscribe(status => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           startPollingFallback();
         }
@@ -235,14 +259,7 @@ export function useSupabaseSignals(filters?: SupabaseSignalFilters) {
       }
       void supabase.removeChannel(channel);
     };
-  }, [
-    isEnabled,
-    filters?.symbol,
-    filters?.status,
-    filters?.closedOnly,
-    filters?.historyOnly,
-    filters?.limit,
-  ]);
+  }, [isEnabled, symbol, status, closedOnly, historyOnly, limit]);
 
   return { supabaseSignals, isLoading };
 }

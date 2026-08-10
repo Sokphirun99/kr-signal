@@ -1,8 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { NewsItem } from "@contracts/news";
 import { InstrumentLogo } from "@/components/signals/InstrumentLogo";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, Newspaper, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ExternalLink,
+  Newspaper,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 10;
@@ -65,7 +70,10 @@ export function NewsListSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-white/5 bg-white/[0.03] p-4 space-y-2.5">
+        <div
+          key={i}
+          className="rounded-xl border border-white/5 bg-white/[0.03] p-4 space-y-2.5"
+        >
           <div className="flex items-center justify-between">
             <Skeleton className="h-4 w-24 rounded-md" />
             <Skeleton className="h-3 w-16" />
@@ -94,13 +102,11 @@ export interface NewsListProps {
  * Side effects: resets page index when items list changes.
  * Failure modes: renders empty state when items array is empty.
  */
-export function NewsList({ items, emptyMessage = "No recent headlines for this filter." }: NewsListProps) {
+export function NewsList({
+  items,
+  emptyMessage = "No recent headlines for this filter.",
+}: NewsListProps) {
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Reset to page 1 whenever items (e.g. filter changes) update
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [items]);
 
   if (!items || items.length === 0) {
     return (
@@ -108,7 +114,8 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
         <Newspaper className="mx-auto h-8 w-8 text-zinc-600 mb-2" />
         <p className="text-sm font-medium text-zinc-400">{emptyMessage}</p>
         <p className="mt-1 text-xs text-zinc-500">
-          Third-party headlines refresh periodically as publications issue market updates.
+          Third-party headlines refresh periodically as publications issue
+          market updates.
         </p>
       </div>
     );
@@ -131,8 +138,12 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
       {/* Top Pagination Summary */}
       <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
         <span>
-          Showing <span className="font-semibold text-white">{startIndex + 1}–{endIndex}</span> of{" "}
-          <span className="font-semibold text-white">{totalItems}</span> headlines
+          Showing{" "}
+          <span className="font-semibold text-white">
+            {startIndex + 1}–{endIndex}
+          </span>{" "}
+          of <span className="font-semibold text-white">{totalItems}</span>{" "}
+          headlines
         </span>
         <span className="font-mono">
           Page {safePage} of {totalPages}
@@ -141,7 +152,7 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
 
       {/* Paginated Headlines List (10 per page) */}
       <div className="space-y-3">
-        {visibleItems.map((item) => {
+        {visibleItems.map(item => {
           const sourceLabel =
             item.sources && item.sources.length > 0
               ? item.sources.join(" · ")
@@ -157,13 +168,16 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
                 <span
                   className={cn(
                     "inline-flex items-center rounded-md border px-2 py-0.5 font-medium",
-                    getSourceBadgeClass(sourceLabel),
+                    getSourceBadgeClass(sourceLabel)
                   )}
                   title={item.sources ? item.sources.join(", ") : undefined}
                 >
                   {sourceLabel}
                 </span>
-                <time dateTime={item.publishedAt} className="font-mono text-zinc-400">
+                <time
+                  dateTime={item.publishedAt}
+                  className="font-mono text-zinc-400"
+                >
                   {formatRelativeTime(item.publishedAt)}
                 </time>
               </div>
@@ -197,7 +211,7 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
                     src={item.imageUrl}
                     alt=""
                     loading="lazy"
-                    onError={(e) => {
+                    onError={e => {
                       e.currentTarget.style.display = "none";
                     }}
                     className="h-16 w-24 rounded-lg border border-white/10 object-cover bg-white/5 shrink-0"
@@ -208,8 +222,10 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
               {/* Matched Symbols Chips */}
               {item.matchedSymbols.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
-                  <span className="text-[11px] text-zinc-400 font-mono">Related:</span>
-                  {item.matchedSymbols.map((symbol) => (
+                  <span className="text-[11px] text-zinc-400 font-mono">
+                    Related:
+                  </span>
+                  {item.matchedSymbols.map(symbol => (
                     <span
                       key={symbol}
                       className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-300"
@@ -236,7 +252,7 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
               "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
               safePage <= 1
                 ? "border-white/5 bg-white/[0.02] text-zinc-600 cursor-not-allowed"
-                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white",
+                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
             )}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -258,7 +274,7 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
                     "flex h-8 w-8 items-center justify-center rounded-lg text-xs font-mono transition-all cursor-pointer",
                     isCurrent
                       ? "bg-emerald-500 text-zinc-950 font-bold shadow-sm shadow-emerald-500/20"
-                      : "border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white",
+                      : "border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white"
                   )}
                 >
                   {pageNumber}
@@ -275,7 +291,7 @@ export function NewsList({ items, emptyMessage = "No recent headlines for this f
               "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
               safePage >= totalPages
                 ? "border-white/5 bg-white/[0.02] text-zinc-600 cursor-not-allowed"
-                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white",
+                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
             )}
           >
             Next 10
