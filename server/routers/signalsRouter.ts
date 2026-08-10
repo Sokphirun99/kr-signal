@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "../middleware";
-import { ensureFresh } from "../engine/pipeline";
+import { setPublicReadCache } from "../context";
 import {
   listSignals,
   computeTrackRecord,
@@ -14,7 +14,7 @@ import { analyzeTechnicalData } from "../engine/analysis";
 import { INSTRUMENTS, TIMEFRAMES } from "@contracts/instruments";
 
 export const signalsRouter = createRouter({
-  /** Signal feed — triggers a throttled pipeline pass first */
+  /** Signal feed — reads the latest completed background pipeline snapshot. */
   list: publicQuery
     .input(
       z
@@ -38,18 +38,17 @@ export const signalsRouter = createRouter({
         })
         .nullish()
     )
-    .query(async ({ input }) => {
-      await ensureFresh().catch(err =>
-        console.error("ensureFresh error:", err)
-      );
+    .query(async ({ input, ctx }) => {
       try {
-        return await listSignals({
+        const result = await listSignals({
           symbol: input?.symbol ?? undefined,
           status: input?.status ?? undefined,
           closedOnly: input?.closedOnly ?? undefined,
           historyOnly: input?.historyOnly ?? undefined,
           limit: input?.limit ?? undefined,
         });
+        setPublicReadCache(ctx, 30, 120);
+        return result;
       } catch (err) {
         console.error("listSignals query error:", err);
         throw new TRPCError({
@@ -61,10 +60,11 @@ export const signalsRouter = createRouter({
     }),
 
   /** Verified track record — computed only from market-graded outcomes */
-  trackRecord: publicQuery.query(async () => {
-    await ensureFresh().catch(err => console.error("ensureFresh error:", err));
+  trackRecord: publicQuery.query(async ({ ctx }) => {
     try {
-      return await computeTrackRecord();
+      const result = await computeTrackRecord();
+      setPublicReadCache(ctx, 300, 900);
+      return result;
     } catch (err) {
       console.error("computeTrackRecord query error:", err);
       throw new TRPCError({
@@ -76,10 +76,11 @@ export const signalsRouter = createRouter({
   }),
 
   /** Audit funnel: scanned → candidate → published over the last 7 days */
-  funnel: publicQuery.query(async () => {
-    await ensureFresh().catch(err => console.error("ensureFresh error:", err));
+  funnel: publicQuery.query(async ({ ctx }) => {
     try {
-      return await computeFunnel(7);
+      const result = await computeFunnel(7);
+      setPublicReadCache(ctx, 300, 900);
+      return result;
     } catch (err) {
       console.error("computeFunnel query error:", err);
       throw new TRPCError({
@@ -107,7 +108,7 @@ export const signalsRouter = createRouter({
         timeframe: z.enum(TIMEFRAMES),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const instrument = INSTRUMENTS.find(item => item.symbol === input.symbol);
       if (!instrument) {
         throw new TRPCError({
@@ -134,7 +135,7 @@ export const signalsRouter = createRouter({
 
         const setup = generateSetup(candles, input.timeframe);
         const gate = setup ? gateSetup(setup, false) : null;
-        return {
+        const result = {
           instrument: {
             symbol: instrument.symbol,
             name: instrument.name,
@@ -157,6 +158,8 @@ export const signalsRouter = createRouter({
             : null,
           gate,
         };
+        setPublicReadCache(ctx, 120, 300);
+        return result;
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         console.error("technical analysis query error:", err);
@@ -169,12 +172,12 @@ export const signalsRouter = createRouter({
     }),
 
   /** Live ticker tape across all instruments */
-  ticker: publicQuery.query(async () => {
+  ticker: publicQuery.query(async ({ ctx }) => {
     try {
       const tickers = await fetchAllTickers(
         INSTRUMENTS.map(i => ({ pair: i.pair, source: i.dataSource }))
       );
-      return INSTRUMENTS.map(inst => {
+      const result = INSTRUMENTS.map(inst => {
         const t = tickers.find(x => x.pair === inst.pair);
         return {
           symbol: inst.symbol,
@@ -187,8 +190,10 @@ export const signalsRouter = createRouter({
           quoteVolume: t?.quoteVolume ?? null,
         };
       });
+      setPublicReadCache(ctx, 30, 60);
+      return result;
     } catch {
-      return INSTRUMENTS.map(inst => ({
+      const result = INSTRUMENTS.map(inst => ({
         symbol: inst.symbol,
         name: inst.name,
         market: inst.market,
@@ -198,6 +203,8 @@ export const signalsRouter = createRouter({
         priceChangePct: null,
         quoteVolume: null,
       }));
+      setPublicReadCache(ctx, 10, 20);
+      return result;
     }
   }),
 });

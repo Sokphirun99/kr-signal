@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
 
 const listInputSchema = z
   .object({
@@ -42,5 +43,17 @@ describe("signalsRouter input validation", () => {
       limit: 50,
     };
     expect(listInputSchema.parse(rawInput)).toEqual(rawInput);
+  });
+});
+
+describe("signalsRouter read-path isolation", () => {
+  it("never starts a pipeline pass from a public viewer request", () => {
+    const source = readFileSync(
+      new URL("./signalsRouter.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).not.toContain("ensureFresh");
+    expect(source).not.toContain("forceRunPipelinePass");
   });
 });

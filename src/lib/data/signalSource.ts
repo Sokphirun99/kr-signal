@@ -24,8 +24,8 @@ export interface UseSignalsResult {
  * Unified signals data hook — resolves from tRPC first, falls back to Supabase.
  * Inputs: optional SignalFilters.
  * Outputs: { signals, isLoading, source } where source drives the DataSourceBadge.
- * Side effects: opens tRPC subscription (30s refetch) and conditionally a Supabase
- *   Realtime channel (15s polling fallback on channel error) when tRPC is unavailable.
+ * Side effects: refreshes the public snapshot once per minute and conditionally
+ *   opens a Supabase Realtime fallback when tRPC is unavailable.
  * Failure modes: returns empty signals array when both sources yield nothing.
  */
 export function useSignals(filters?: SignalFilters): UseSignalsResult {
@@ -37,7 +37,9 @@ export function useSignals(filters?: SignalFilters): UseSignalsResult {
       limit: filters?.limit ?? 100,
     },
     {
-      refetchInterval: 30_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+      staleTime: 30_000,
       retry: 2,
     }
   );

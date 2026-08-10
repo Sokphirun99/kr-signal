@@ -13,8 +13,8 @@ import { toast } from "sonner";
 
 const VALID_SYMBOLS = INSTRUMENTS.map(i => i.symbol);
 const DEFAULT_SIGNAL_LIMIT = 100;
-const BASE_POLL_INTERVAL_MS = 15_000;
-const POLL_JITTER_MAX_MS = 3_000;
+const BASE_POLL_INTERVAL_MS = 60_000;
+const POLL_JITTER_MAX_MS = 5_000;
 const REALTIME_DEBOUNCE_MS = 2_000;
 const REALTIME_CHANNEL_NAME = "signals-feed";
 const DEFAULT_FINGERPRINT = "0:0";

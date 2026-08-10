@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { trpc } from "@/providers/trpc";
-import { useSupabaseSignals, computeTrackFromSignals } from "@/hooks/useSupabaseSignals";
+import {
+  useSupabaseSignals,
+  computeTrackFromSignals,
+} from "@/hooks/useSupabaseSignals";
 import type { TrackRecord } from "@contracts/trackRecord";
 export type { TrackRecord } from "@contracts/trackRecord";
 
@@ -25,19 +28,25 @@ export interface UseTrackRecordResult {
  * computing the record from raw Supabase signals via computeTrackFromSignals.
  * Inputs: none.
  * Outputs: { trackRecord, isLoading, source } where source drives the DataSourceBadge.
- * Side effects: opens tRPC subscription (60s refetch) and conditionally a Supabase
- *   Realtime channel when tRPC is unavailable.
+ * Side effects: refreshes summary data every five minutes and conditionally opens
+ *   a Supabase Realtime fallback when tRPC is unavailable.
  * Failure modes: trackRecord is undefined while loading or when both sources fail.
  */
 export function useTrackRecord(): UseTrackRecordResult {
   const trpcQuery = trpc.signals.trackRecord.useQuery(undefined, {
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
+    staleTime: 150_000,
     retry: 2,
   });
-  const funnelQuery = trpc.signals.funnel.useQuery();
+  const funnelQuery = trpc.signals.funnel.useQuery(undefined, {
+    staleTime: 150_000,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: false,
+  });
 
   const isFallbackNeeded = Boolean(
-    trpcQuery.isError || (!trpcQuery.isLoading && !trpcQuery.data),
+    trpcQuery.isError || (!trpcQuery.isLoading && !trpcQuery.data)
   );
 
   const { supabaseSignals, isLoading: isSupabaseLoading } = useSupabaseSignals({
@@ -48,7 +57,7 @@ export function useTrackRecord(): UseTrackRecordResult {
 
   const fallbackTrack = useMemo(
     () => computeTrackFromSignals(supabaseSignals),
-    [supabaseSignals],
+    [supabaseSignals]
   );
 
   return useMemo<UseTrackRecordResult>(() => {

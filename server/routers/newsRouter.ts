@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "../middleware";
 import { getNews } from "../engine/news";
 import { getRecentNewsFromDb } from "../queries/news";
 import { INSTRUMENTS, type Market } from "@contracts/instruments";
+import { setPublicReadCache } from "../context";
 
 const MAX_NEWS_LIMIT = 100;
 const DEFAULT_NEWS_LIMIT = 60;
@@ -15,7 +16,9 @@ const DEFAULT_NEWS_LIMIT = 60;
  * Failure modes: returns empty set for unknown market.
  */
 function getSymbolsForMarket(market: Market): Set<string> {
-  const symbols = INSTRUMENTS.filter((i) => i.market === market).map((i) => i.symbol);
+  const symbols = INSTRUMENTS.filter(i => i.market === market).map(
+    i => i.symbol
+  );
   return new Set(symbols);
 }
 
@@ -32,9 +35,9 @@ export const newsRouter = createRouter({
           market: z.enum(["crypto", "gold", "forex"]).nullish(),
           limit: z.number().min(1).max(MAX_NEWS_LIMIT).nullish(),
         })
-        .nullish(),
+        .nullish()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       let allNews = await getRecentNewsFromDb(MAX_NEWS_LIMIT);
       if (!allNews || allNews.length === 0) {
         allNews = await getNews();
@@ -47,14 +50,18 @@ export const newsRouter = createRouter({
       let filtered = allNews;
 
       if (symbolFilter) {
-        filtered = filtered.filter((item) => item.matchedSymbols.includes(symbolFilter));
+        filtered = filtered.filter(item =>
+          item.matchedSymbols.includes(symbolFilter)
+        );
       } else if (marketFilter) {
         const marketSymbols = getSymbolsForMarket(marketFilter);
-        filtered = filtered.filter((item) =>
-          item.matchedSymbols.some((sym) => marketSymbols.has(sym)),
+        filtered = filtered.filter(item =>
+          item.matchedSymbols.some(sym => marketSymbols.has(sym))
         );
       }
 
-      return filtered.slice(0, Math.min(limit, MAX_NEWS_LIMIT));
+      const result = filtered.slice(0, Math.min(limit, MAX_NEWS_LIMIT));
+      setPublicReadCache(ctx, 300, 900);
+      return result;
     }),
 });

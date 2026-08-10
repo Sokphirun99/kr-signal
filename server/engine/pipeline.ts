@@ -1,10 +1,9 @@
 /**
  * Pipeline orchestrator.
  *
- * No cron daemon exists in this deployment model, so the pipeline runs
- * "scan-on-read": routers call ensureFresh(), which throttles to one pass
- * per SCAN_INTERVAL and then (1) verifies open signals against fresh tape,
- * (2) scans every instrument × timeframe for new setups.
+ * Pipeline passes are started only by the authenticated cron/manual scan
+ * route. Public read requests never run market scans, so visitor traffic
+ * cannot multiply exchange and database work.
  *
  * Timeframes within each instrument are parallelized via Promise.all.
  * Kline caches store Promises (not resolved values) to avoid duplicate
@@ -13,7 +12,7 @@
 
 import { getDb } from "../queries/connection";
 import { signals, scanRuns, signalEvents, type InsertSignal } from "@db/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   INSTRUMENTS,
   TIMEFRAMES,
@@ -44,8 +43,6 @@ import {
 import { isUniqueViolation } from "../lib/postgresError";
 import { getEngineConfigSnapshot } from "../config/engineConfig";
 
-const SCAN_INTERVAL_MS = 5 * 60_000; // one pipeline pass per 5 minutes max
-let lastPass = 0;
 let running = false;
 
 export interface PassReport {
@@ -119,27 +116,6 @@ function assertPipelineActive(signal?: AbortSignal): void {
   }
 }
 
-export async function ensureFresh(): Promise<void> {
-  if (running || Date.now() - lastPass < SCAN_INTERVAL_MS) return;
-  try {
-    const latestRun = await getDb()
-      .select({ ranAt: scanRuns.ranAt })
-      .from(scanRuns)
-      .orderBy(desc(scanRuns.ranAt))
-      .limit(1);
-    if (latestRun.length > 0 && latestRun[0].ranAt) {
-      const dbLastPass = latestRun[0].ranAt.getTime();
-      if (Date.now() - dbLastPass < SCAN_INTERVAL_MS) {
-        lastPass = dbLastPass;
-        return;
-      }
-    }
-  } catch (err) {
-    console.error("[ensureFresh DB Throttle Check Error]:", err);
-  }
-  return forceRunPipelinePass().then(() => undefined);
-}
-
 export async function forceRunPipelinePass(): Promise<PipelineReport> {
   const startedAt = Date.now();
   if (running) {
@@ -153,7 +129,6 @@ export async function forceRunPipelinePass(): Promise<PipelineReport> {
     const report = await runWithPipelineLease(leaseOwner, signal =>
       runPipeline(signal)
     );
-    lastPass = Date.now();
     return report;
   } catch (error) {
     const report = newPassReport();

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { formatPrice, type Timeframe, type ClientSignal } from "@contracts/instruments";
+import {
+  formatPrice,
+  type Timeframe,
+  type ClientSignal,
+} from "@contracts/instruments";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/providers/trpc";
@@ -39,8 +43,8 @@ function LevelCard({
           subtitleType === "risk"
             ? "text-red-400"
             : subtitleType === "reward"
-            ? "text-emerald-400"
-            : "text-zinc-400",
+              ? "text-emerald-400"
+              : "text-zinc-400"
         )}
       >
         {subtitle}
@@ -58,8 +62,12 @@ interface AnalysisMetricProps {
 function AnalysisMetric({ label, value, detail }: AnalysisMetricProps) {
   return (
     <div className="rounded-md border border-white/5 bg-black/20 px-2.5 py-2">
-      <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
-      <p className="mt-0.5 font-mono text-xs font-semibold tabular-nums text-zinc-100">{value}</p>
+      <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">
+        {label}
+      </p>
+      <p className="mt-0.5 font-mono text-xs font-semibold tabular-nums text-zinc-100">
+        {value}
+      </p>
       <p className="mt-0.5 text-[10px] text-zinc-500">{detail}</p>
     </div>
   );
@@ -81,7 +89,10 @@ function SignalTechnicalAnalysis({
   const [isExpanded, setIsExpanded] = useState(false);
   const query = trpc.signals.analysis.useQuery(
     { symbol, timeframe },
-    { refetchInterval: 60_000, staleTime: 25_000 },
+    {
+      staleTime: 300_000,
+      refetchOnWindowFocus: false,
+    }
   );
   const analysis = query.data?.analysis;
 
@@ -118,8 +129,8 @@ function SignalTechnicalAnalysis({
                 analysis.directionalBias === "bullish"
                   ? "text-emerald-400"
                   : analysis.directionalBias === "bearish"
-                  ? "text-red-400"
-                  : "text-zinc-400",
+                    ? "text-red-400"
+                    : "text-zinc-400"
               )}
             >
               {analysis.directionalBias} bias
@@ -133,7 +144,11 @@ function SignalTechnicalAnalysis({
               className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <span>{isExpanded ? "Collapse" : "All indicators"}</span>
-              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
             </button>
           </div>
         )}
@@ -142,7 +157,9 @@ function SignalTechnicalAnalysis({
       {query.isLoading ? (
         <p className="mt-3 text-xs text-zinc-500">Loading indicator values…</p>
       ) : query.isError ? (
-        <p className="mt-3 text-xs text-red-300">Technical data is temporarily unavailable.</p>
+        <p className="mt-3 text-xs text-red-300">
+          Technical data is temporarily unavailable.
+        </p>
       ) : analysis ? (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-4">
           <AnalysisMetric
@@ -150,13 +167,17 @@ function SignalTechnicalAnalysis({
             value={formatPrice(analysis.currentPrice, decimals)}
             detail="Last close"
           />
-          <AnalysisMetric label="RSI 14" value={analysis.rsi14.toFixed(1)} detail="Momentum" />
+          <AnalysisMetric
+            label="RSI 14"
+            value={analysis.rsi14.toFixed(1)}
+            detail="Momentum"
+          />
           <AnalysisMetric
             label="ADX / DMI"
             value={optionalNumber(analysis.adx14, 1)}
             detail={`+DI ${optionalNumber(analysis.plusDi14, 1)} · −DI ${optionalNumber(
               analysis.minusDi14,
-              1,
+              1
             )}`}
           />
           <AnalysisMetric
@@ -184,7 +205,11 @@ function SignalTechnicalAnalysis({
               />
               <AnalysisMetric
                 label="VWAP"
-                value={analysis.vwap === null ? "—" : formatPrice(analysis.vwap, decimals)}
+                value={
+                  analysis.vwap === null
+                    ? "—"
+                    : formatPrice(analysis.vwap, decimals)
+                }
                 detail="Volume-weighted price"
               />
               <AnalysisMetric
@@ -203,8 +228,8 @@ function SignalTechnicalAnalysis({
                   analysis.bullishDivergence
                     ? "Bullish"
                     : analysis.bearishDivergence
-                    ? "Bearish"
-                    : "None"
+                      ? "Bearish"
+                      : "None"
                 }
                 detail="20-candle heuristic"
               />
@@ -248,7 +273,9 @@ export function SignalLevels({ signal, decimals }: SignalLevelsProps) {
       <div
         className={cn(
           "mt-4 grid gap-2.5",
-          isCapped ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
+          isCapped
+            ? "grid-cols-2 sm:grid-cols-5"
+            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
         )}
       >
         <LevelCard
