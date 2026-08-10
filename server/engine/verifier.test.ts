@@ -355,4 +355,169 @@ describe("verifySignal honesty rules & chandelier trailing stop", () => {
     expect(verdict.status).toBe("open");
     expect(verdict.entryFilled).toBe(true);
   });
+
+  it("excludes the setup candle from entry and exit grading", () => {
+    const signal = makeSignal({
+      expiresAt: new Date("2027-01-01T00:00:00Z"),
+    });
+    const verdict = verifySignal(signal, [
+      {
+        openTime: signal.setupAt.getTime(),
+        open: 100,
+        high: 145,
+        low: 85,
+        close: 120,
+        volume: 10,
+      },
+    ]);
+    expect(verdict.status).toBe("open");
+    expect(verdict.entryFilled).toBe(false);
+    expect(verdict.events).toEqual([]);
+  });
+
+  it("uses stop-first grading when stop and target share the entry candle", () => {
+    const verdict = verifySignal(makeSignal(), [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 100,
+        high: 120,
+        low: 89,
+        close: 110,
+        volume: 10,
+      },
+    ]);
+    expect(verdict.status).toBe("sl");
+    expect(verdict.exitPrice).toBe(90);
+  });
+
+  it("does not grade a candle that extends past the hard expiry boundary", () => {
+    const signal = makeSignal({
+      expiresAt: new Date("2026-01-01T01:30:00Z"),
+    });
+    const verdict = verifySignal(signal, [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 100,
+        high: 145,
+        low: 89,
+        close: 140,
+        volume: 10,
+      },
+    ]);
+    expect(verdict.status).toBe("expired");
+    expect(verdict.entryFilled).toBe(false);
+  });
+
+  it("applies sell-side gap stops and realized R symmetrically", () => {
+    const signal = makeSignal({
+      side: "sell",
+      entry: 100,
+      stopLoss: 110,
+      tp1: 85,
+      tp2: 75,
+      tp3: 60,
+    });
+    const verdict = verifySignal(signal, [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 99,
+        high: 101,
+        low: 98,
+        close: 100,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 115,
+        high: 118,
+        low: 112,
+        close: 116,
+        volume: 10,
+      },
+    ]);
+    expect(verdict.status).toBe("sl");
+    expect(verdict.exitPrice).toBe(115);
+    expect(verdict.rMultiple).toBe(-1.5);
+  });
+
+  it("returns deterministic replay events without duplicate event keys", () => {
+    const signal = makeSignal();
+    const candles: Candle[] = [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 100,
+        high: 116,
+        low: 99,
+        close: 115,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 114,
+        high: 114,
+        low: 99,
+        close: 100,
+        volume: 10,
+      },
+    ];
+    const first = verifySignal(signal, candles);
+    const replay = verifySignal(signal, candles);
+    expect(replay).toEqual(first);
+    expect(new Set(first.events.map(event => event.eventKey)).size).toBe(
+      first.events.length
+    );
+  });
+
+  it("turns invalid geometry into a finite, deterministic undecidable result", () => {
+    const signal = makeSignal({ stopLoss: 100 });
+    const verdict = verifySignal(signal, []);
+    expect(verdict.status).toBe("undecidable");
+    expect(verdict.exitPrice).toBeNull();
+    expect(verdict.rMultiple).toBeNull();
+    expect(verdict.closedAt).toEqual(signal.setupAt);
+  });
+
+  it("marks missing candle coverage as deterministic undecidable", () => {
+    const signal = makeSignal({
+      entryFilled: true,
+      expiresAt: new Date("2026-01-02T00:00:00Z"),
+    });
+    const verdict = verifySignal(signal, []);
+    expect(verdict.status).toBe("undecidable");
+    expect(verdict.entryFilled).toBe(true);
+    expect(verdict.closedAt).toEqual(signal.expiresAt);
+    expect(verifySignal(signal, [])).toEqual(verdict);
+  });
+
+  it("moves a sell stop to break-even after TP1", () => {
+    const signal = makeSignal({
+      side: "sell",
+      entry: 100,
+      stopLoss: 110,
+      tp1: 85,
+      tp2: 75,
+      tp3: 60,
+    });
+    const verdict = verifySignal(signal, [
+      {
+        openTime: new Date("2026-01-01T01:00:00Z").getTime(),
+        open: 100,
+        high: 101,
+        low: 84,
+        close: 85,
+        volume: 10,
+      },
+      {
+        openTime: new Date("2026-01-01T02:00:00Z").getTime(),
+        open: 90,
+        high: 101,
+        low: 89,
+        close: 100,
+        volume: 10,
+      },
+    ]);
+    expect(verdict.status).toBe("be");
+    expect(verdict.exitPrice).toBe(100);
+    expect(verdict.rMultiple).toBe(0);
+  });
 });

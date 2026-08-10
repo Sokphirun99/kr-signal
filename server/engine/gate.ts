@@ -116,7 +116,7 @@ export function scoreSetup(
     if (setup.style === "trend" && setup.side === "buy" && fg > 75) score -= 5;
   }
 
-  return Math.max(40, Math.min(90, score));
+  return Number.isFinite(score) ? Math.max(40, Math.min(90, score)) : 40;
 }
 
 /**
@@ -184,16 +184,34 @@ export function gateSetup(
   if (confidence < CONFIDENCE_FLOOR)
     reasons.push(`confluence ${confidence} below floor ${CONFIDENCE_FLOOR}`);
 
+  const levels = [setup.entry, setup.stopLoss, setup.tp1, setup.tp2, setup.tp3];
+  const finiteLevels = levels.every(Number.isFinite);
+  const orderedLevels =
+    finiteLevels &&
+    (setup.side === "buy"
+      ? setup.stopLoss < setup.entry &&
+        setup.entry < setup.tp1 &&
+        setup.tp1 < setup.tp2 &&
+        setup.tp2 < setup.tp3
+      : setup.stopLoss > setup.entry &&
+        setup.entry > setup.tp1 &&
+        setup.tp1 > setup.tp2 &&
+        setup.tp2 > setup.tp3);
+  if (!finiteLevels || setup.entry <= 0 || !orderedLevels) {
+    reasons.push("invalid risk geometry");
+  }
+
   const risk = Math.abs(setup.entry - setup.stopLoss);
   const reward1 = Math.abs(setup.tp1 - setup.entry);
-  if (risk <= 0) reasons.push("invalid risk geometry");
-  else if (reward1 / risk < 1.4) reasons.push("first target under 1.4R");
+  if (Number.isFinite(risk) && risk > 0 && reward1 / risk < 1.4) {
+    reasons.push("first target under 1.4R");
+  }
 
   const stopDistancePct = risk / setup.entry;
   const minStopPct = isGold ? 0.0015 : isForex ? 0.0003 : 0.0005;
-  if (stopDistancePct < minStopPct)
+  if (Number.isFinite(stopDistancePct) && stopDistancePct < minStopPct)
     reasons.push(`stop too tight — noise would grade it randomly`);
-  if (stopDistancePct > 0.08)
+  if (Number.isFinite(stopDistancePct) && stopDistancePct > 0.08)
     reasons.push("stop wider than 8% — not a tradeable setup");
 
   return { pass: reasons.length === 0, confidence, reasons };

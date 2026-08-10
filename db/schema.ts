@@ -13,7 +13,9 @@ import {
   uniqueIndex,
   pgSchema,
   bigint,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const privateSchema = pgSchema("private");
 
@@ -82,6 +84,29 @@ export const signals = pgTable(
     index("status_idx").on(t.status),
     index("symbol_idx").on(t.symbol),
     index("opened_idx").on(t.openedAt),
+    check(
+      "signals_finite_levels_check",
+      sql`${t.entry}::text not in ('NaN', 'Infinity', '-Infinity')
+        and ${t.stopLoss}::text not in ('NaN', 'Infinity', '-Infinity')
+        and ${t.tp1}::text not in ('NaN', 'Infinity', '-Infinity')
+        and ${t.tp2}::text not in ('NaN', 'Infinity', '-Infinity')
+        and ${t.tp3}::text not in ('NaN', 'Infinity', '-Infinity')`
+    ),
+    check(
+      "signals_risk_geometry_check",
+      sql`${t.entry} > 0 and (
+        (${t.side} = 'buy' and ${t.stopLoss} < ${t.entry} and ${t.entry} < ${t.tp1}
+          and ${t.tp1} <= ${t.tp2} and ${t.tp2} <= ${t.tp3})
+        or
+        (${t.side} = 'sell' and ${t.stopLoss} > ${t.entry} and ${t.entry} > ${t.tp1}
+          and ${t.tp1} >= ${t.tp2} and ${t.tp2} >= ${t.tp3})
+      )`
+    ),
+    check(
+      "signals_finite_results_check",
+      sql`(${t.exitPrice} is null or ${t.exitPrice}::text not in ('NaN', 'Infinity', '-Infinity'))
+        and (${t.rMultiple} is null or ${t.rMultiple}::text not in ('NaN', 'Infinity', '-Infinity'))`
+    ),
   ]
 );
 
@@ -170,6 +195,10 @@ export const signalEvents = privateSchema.table(
   t => [
     uniqueIndex("signal_events_event_key_uidx").on(t.eventKey),
     index("signal_events_signal_occurred_idx").on(t.signalId, t.occurredAt),
+    check(
+      "signal_events_finite_price_check",
+      sql`${t.price} is null or ${t.price}::text not in ('NaN', 'Infinity', '-Infinity')`
+    ),
   ]
 );
 

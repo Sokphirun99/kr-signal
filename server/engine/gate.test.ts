@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { gateSetup, scoreSetup } from "./gate";
 import type { Setup } from "./strategy";
 
-function createMockSetup(overrides?: Partial<Setup['context']>): Setup {
+function createMockSetup(overrides?: Partial<Setup["context"]>): Setup {
   return {
     timeframe: "15m",
     style: "trend",
@@ -107,5 +107,19 @@ describe("Gate Scoring", () => {
     setup.setupAt = new Date("2026-08-07T09:00:00Z").getTime();
     const result = gateSetup(setup, false, { symbol: "EURUSD" });
     expect(result.reasons).not.toContain("forex-off-session");
+  });
+
+  it("rejects non-finite and directionally invalid level geometry", () => {
+    const nonFinite = createMockSetup();
+    nonFinite.tp3 = Number.POSITIVE_INFINITY;
+    expect(
+      gateSetup(nonFinite, false, { ignoreOffHours: true }).reasons
+    ).toContain("invalid risk geometry");
+
+    const wrongSide = createMockSetup();
+    wrongSide.stopLoss = 105;
+    expect(
+      gateSetup(wrongSide, false, { ignoreOffHours: true }).reasons
+    ).toContain("invalid risk geometry");
   });
 });

@@ -35,8 +35,11 @@ import { upsertNewsBatch, pruneNewsOlderThan7Days } from "../queries/news";
 import { pruneScanRunsOlderThan14Days } from "../queries/signals";
 import { randomUUID } from "node:crypto";
 import {
-  releasePipelineLease,
-  tryAcquirePipelineLease,
+  PipelineLeaseAcquisitionError,
+  PipelineLeaseHeartbeatError,
+  PipelineLeaseHeldError,
+  PipelineLeaseReleaseError,
+  runWithPipelineLease,
 } from "../queries/pipelineLease";
 import { isUniqueViolation } from "../lib/postgresError";
 import { getEngineConfigSnapshot } from "../config/engineConfig";
@@ -47,6 +50,9 @@ let running = false;
 
 export interface PassReport {
   scannedAt?: Date;
+  scanTargets: number;
+  instrumentsScanned: number;
+  timeframesScanned: number;
   verified: number;
   closed: number;
   candidates: number;
@@ -57,6 +63,14 @@ export interface PassReport {
     verificationMs: number;
     scanMs: number;
     maintenanceMs: number;
+  };
+  failures: {
+    marketData: number;
+    database: number;
+    leaseAcquisition: number;
+    leaseRelease: number;
+    heartbeat: number;
+    news: number;
   };
 }
 
@@ -72,6 +86,37 @@ interface ScanRunRow {
   candidates: number;
   published: number;
   note: string | null;
+}
+
+function newPassReport(scannedAt = new Date()): PipelineReport {
+  return {
+    scannedAt,
+    scanTargets: 0,
+    instrumentsScanned: 0,
+    timeframesScanned: 0,
+    verified: 0,
+    closed: 0,
+    candidates: 0,
+    published: 0,
+    errors: [],
+    timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
+    failures: {
+      marketData: 0,
+      database: 0,
+      leaseAcquisition: 0,
+      leaseRelease: 0,
+      heartbeat: 0,
+      news: 0,
+    },
+  };
+}
+
+function assertPipelineActive(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error("Pipeline pass aborted after lease loss.");
+  }
 }
 
 export async function ensureFresh(): Promise<void> {
@@ -96,73 +141,52 @@ export async function ensureFresh(): Promise<void> {
 }
 
 export async function forceRunPipelinePass(): Promise<PipelineReport> {
+  const startedAt = Date.now();
   if (running) {
-    return {
-      scannedAt: new Date(),
-      verified: 0,
-      closed: 0,
-      candidates: 0,
-      published: 0,
-      errors: ["Pipeline pass already running"],
-      timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
-    };
+    const report = newPassReport();
+    report.errors.push("Pipeline pass already running");
+    return report;
   }
   running = true;
   const leaseOwner = randomUUID();
-  let leaseAcquired = false;
   try {
-    try {
-      leaseAcquired = await tryAcquirePipelineLease(leaseOwner);
-    } catch (err) {
-      return {
-        scannedAt: new Date(),
-        verified: 0,
-        closed: 0,
-        candidates: 0,
-        published: 0,
-        errors: [`Unable to acquire pipeline lease: ${String(err)}`],
-        timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
-      };
-    }
-
-    if (!leaseAcquired) {
-      return {
-        scannedAt: new Date(),
-        verified: 0,
-        closed: 0,
-        candidates: 0,
-        published: 0,
-        errors: ["Pipeline lease held by another invocation"],
-        timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
-      };
-    }
-
-    const report = await runPipeline();
+    const report = await runWithPipelineLease(leaseOwner, signal =>
+      runPipeline(signal)
+    );
     lastPass = Date.now();
     return report;
-  } finally {
-    if (leaseAcquired) {
-      await releasePipelineLease(leaseOwner).catch(err =>
-        console.error("[pipeline] Failed to release distributed lease:", err)
-      );
+  } catch (error) {
+    const report = newPassReport();
+    report.timings.totalMs = Date.now() - startedAt;
+    if (error instanceof PipelineLeaseHeartbeatError) {
+      report.failures.heartbeat++;
+      report.errors.push(error.message);
+    } else if (
+      error instanceof PipelineLeaseHeldError ||
+      error instanceof PipelineLeaseAcquisitionError
+    ) {
+      report.failures.leaseAcquisition++;
+      report.errors.push(error.message);
+    } else if (error instanceof PipelineLeaseReleaseError) {
+      report.failures.leaseRelease++;
+      report.errors.push(error.message);
+    } else {
+      report.failures.database++;
+      report.errors.push(`Pipeline execution failed: ${String(error)}`);
     }
+    return report;
+  } finally {
     running = false;
   }
 }
 
-export async function runPipeline(): Promise<PipelineReport> {
+export async function runPipeline(
+  signal?: AbortSignal
+): Promise<PipelineReport> {
   const pipelineStartedAt = Date.now();
   const engineSnapshot = getEngineConfigSnapshot();
   console.time("pipeline-total");
-  const report: PipelineReport = {
-    scannedAt: new Date(),
-    verified: 0,
-    closed: 0,
-    candidates: 0,
-    published: 0,
-    errors: [],
-    timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
-  };
+  const report = newPassReport();
 
   /*
    * In-flight Promise caches — storing Promise<Candle[]> instead of
@@ -194,10 +218,12 @@ export async function runPipeline(): Promise<PipelineReport> {
     .where(eq(signals.status, "open"));
 
   for (const sig of openSignals) {
+    assertPipelineActive(signal);
     const instrument = INSTRUMENTS.find(i => i.symbol === sig.symbol);
     if (!instrument) {
       const closedAt = new Date();
       await getDb().transaction(async tx => {
+        assertPipelineActive(signal);
         await tx
           .update(signals)
           .set({ status: "undecidable", closedAt })
@@ -217,17 +243,29 @@ export async function runPipeline(): Promise<PipelineReport> {
       report.closed++;
       continue;
     }
+    let candles: Candle[];
     try {
-      const candles = await klinesFor(
+      candles = await klinesFor(
         instrument.pair,
         sig.timeframe,
         instrument.dataSource
       );
-      const verdict = verifySignal(sig, candles, engineSnapshot.config);
-      report.verified++;
-      const signalChanged =
-        verdict.status !== "open" || verdict.entryFilled !== sig.entryFilled;
-      if (signalChanged || verdict.events.length > 0) {
+    } catch (err) {
+      assertPipelineActive(signal);
+      report.failures.marketData++;
+      report.errors.push(
+        `verify market data ${sig.symbol} ${sig.timeframe}: ${String(err)}`
+      );
+      continue;
+    }
+
+    const verdict = verifySignal(sig, candles, engineSnapshot.config);
+    report.verified++;
+    const signalChanged =
+      verdict.status !== "open" || verdict.entryFilled !== sig.entryFilled;
+    if (signalChanged || verdict.events.length > 0) {
+      try {
+        assertPipelineActive(signal);
         await getDb().transaction(async tx => {
           if (signalChanged) {
             await tx
@@ -258,11 +296,13 @@ export async function runPipeline(): Promise<PipelineReport> {
           }
         });
         if (verdict.status !== "open") report.closed++;
+      } catch (err) {
+        assertPipelineActive(signal);
+        report.failures.database++;
+        report.errors.push(
+          `verify database ${sig.symbol} ${sig.timeframe}: ${String(err)}`
+        );
       }
-    } catch (err) {
-      report.errors.push(
-        `verify ${sig.symbol} ${sig.timeframe}: ${String(err)}`
-      );
     }
   }
   report.timings.verificationMs = Date.now() - verificationStartedAt;
@@ -284,27 +324,30 @@ export async function runPipeline(): Promise<PipelineReport> {
       let fearAndGreed: number | null = null;
 
       if (instrument.market === "crypto") {
-        try {
-          const [fr, oi, tr, fg] = await Promise.all([
-            fetchFundingRate(instrument.symbol),
-            fetchOpenInterest(instrument.symbol),
-            fetchTakerRatio(instrument.symbol),
-            fearAndGreedPromise,
-          ]);
-          fundingRate = fr;
-          openInterest = oi;
-          takerRatio = tr;
-          fearAndGreed = fg;
-        } catch {
-          fundingRate = null;
-          openInterest = null;
-          takerRatio = null;
-          fearAndGreed = null;
+        const [fr, oi, tr, fg] = await Promise.all([
+          fetchFundingRate(instrument.symbol),
+          fetchOpenInterest(instrument.symbol),
+          fetchTakerRatio(instrument.symbol),
+          fearAndGreedPromise,
+        ]);
+        fundingRate = fr;
+        openInterest = oi;
+        takerRatio = tr;
+        fearAndGreed = fg;
+        const missingInputs = [fr, oi, tr, fg].filter(
+          value => value == null
+        ).length;
+        if (missingInputs > 0) {
+          report.failures.marketData += missingInputs;
+          report.errors.push(
+            `market data ${instrument.symbol}: ${missingInputs} optional futures/sentiment input(s) unavailable`
+          );
         }
       }
 
       await Promise.all(
         TIMEFRAMES.map(async timeframe => {
+          assertPipelineActive(signal);
           let candidates = 0;
           let published = 0;
           let note: string | null = null;
@@ -418,6 +461,7 @@ export async function runPipeline(): Promise<PipelineReport> {
                     if (isUniqueViolation(err)) {
                       note = "duplicate setup (already recorded)";
                     } else {
+                      report.failures.database++;
                       note = `insert error: ${String(err)}`;
                       report.errors.push(
                         `insert ${instrument.symbol} ${timeframe}: ${String(err)}`
@@ -428,7 +472,9 @@ export async function runPipeline(): Promise<PipelineReport> {
               }
             }
           } catch (err) {
+            assertPipelineActive(signal);
             note = `error: ${String(err)}`;
+            report.failures.marketData++;
             report.errors.push(
               `scan ${instrument.symbol} ${timeframe}: ${String(err)}`
             );
@@ -440,18 +486,24 @@ export async function runPipeline(): Promise<PipelineReport> {
             published,
             note,
           });
+          report.scanTargets++;
         })
       );
     })
   );
   report.timings.scanMs = Date.now() - scanStartedAt;
+  report.timeframesScanned = allScanRows.length;
+  report.instrumentsScanned = new Set(allScanRows.map(row => row.symbol)).size;
   console.timeEnd("stage2-scan");
 
   // ---- Batch-insert scan bookkeeping in one round-trip --------------------
   if (allScanRows.length > 0) {
     try {
+      assertPipelineActive(signal);
       await getDb().insert(scanRuns).values(allScanRows);
     } catch (err) {
+      assertPipelineActive(signal);
+      report.failures.database++;
       const message = `scan_runs bookkeeping: ${String(err)}`;
       report.errors.push(message);
       console.error(`[pipeline] ${message}`);
@@ -460,15 +512,27 @@ export async function runPipeline(): Promise<PipelineReport> {
 
   // ---- Sync fresh news & prune rolling data ------------------------------
   const maintenanceStartedAt = Date.now();
+  let freshNews: Awaited<ReturnType<typeof getNews>> = [];
   try {
-    const freshNews = await getNews(true);
+    assertPipelineActive(signal);
+    freshNews = await getNews(true);
+  } catch (err) {
+    assertPipelineActive(signal);
+    report.failures.news++;
+    report.errors.push(`news: ${String(err)}`);
+    console.error("[pipeline] News sync error:", err);
+  }
+  try {
+    assertPipelineActive(signal);
     if (freshNews.length > 0) {
       await upsertNewsBatch(freshNews);
     }
     await pruneNewsOlderThan7Days();
     await pruneScanRunsOlderThan14Days();
   } catch (err) {
-    report.errors.push(`maintenance: ${String(err)}`);
+    assertPipelineActive(signal);
+    report.failures.database++;
+    report.errors.push(`maintenance database: ${String(err)}`);
     console.error("[pipeline] Data sync/prune error:", err);
   }
   report.timings.maintenanceMs = Date.now() - maintenanceStartedAt;

@@ -13,6 +13,7 @@
 
 import type { Candle } from "./binance";
 import type { Signal } from "@db/schema";
+import { TF_MS } from "@contracts/instruments";
 import { atrSeries } from "./indicators";
 import { getEngineConfig, type EngineConfig } from "../config/engineConfig";
 
@@ -85,13 +86,54 @@ export function verifySignal(
     events,
   };
 
+  const invalidGeometry =
+    ![
+      signal.entry,
+      signal.stopLoss,
+      signal.tp1,
+      signal.tp2,
+      signal.tp3,
+      risk,
+    ].every(Number.isFinite) ||
+    risk <= 0 ||
+    signal.entry <= 0 ||
+    (isBuy
+      ? !(
+          signal.stopLoss < signal.entry &&
+          signal.entry < signal.tp1 &&
+          signal.tp1 < signal.tp2 &&
+          signal.tp2 < signal.tp3
+        )
+      : !(
+          signal.stopLoss > signal.entry &&
+          signal.entry > signal.tp1 &&
+          signal.tp1 > signal.tp2 &&
+          signal.tp2 > signal.tp3
+        ));
+  if (invalidGeometry) {
+    const closedAt = new Date(signal.setupAt);
+    recordEvent("UNDECIDABLE", closedAt, null, {
+      reason: "invalid signal risk geometry",
+      entryFilled: false,
+    });
+    return { ...base, status: "undecidable", closedAt };
+  }
+
   // Only candles after the setup candle matter
   const tape = candles.filter(c => c.openTime > signal.setupAt.getTime());
   if (tape.length === 0) {
     if (now > signal.expiresAt.getTime()) {
-      const expiredAt = new Date(signal.expiresAt);
-      recordEvent("EXPIRED", expiredAt, null, { entryFilled: false });
-      return { ...base, status: "expired", closedAt: expiredAt };
+      const closedAt = new Date(signal.expiresAt);
+      recordEvent("UNDECIDABLE", closedAt, null, {
+        reason: "candle coverage did not reach expiry",
+        entryFilled: signal.entryFilled,
+      });
+      return {
+        ...base,
+        status: "undecidable",
+        entryFilled: signal.entryFilled,
+        closedAt,
+      };
     }
     return base;
   }
@@ -114,9 +156,9 @@ export function verifySignal(
   let lowestCloseSinceTP2 = Infinity;
 
   for (const c of tape) {
-    // Expiry is a hard boundary. A candle that starts at/after expiry cannot
-    // create a new fill or terminal TP/SL outcome.
-    if (c.openTime >= signal.expiresAt.getTime()) {
+    // Expiry is a hard boundary. A candle must be fully closed by expiry;
+    // otherwise its OHLC cannot prove whether a touch happened in time.
+    if (c.openTime + TF_MS[signal.timeframe] > signal.expiresAt.getTime()) {
       const expiredAt = new Date(signal.expiresAt);
       recordEvent("EXPIRED", expiredAt, null, { entryFilled: filled });
       return {
@@ -144,6 +186,19 @@ export function verifySignal(
       const r = isBuy
         ? (exitPrice - signal.entry) / risk
         : (signal.entry - exitPrice) / risk;
+      if (!Number.isFinite(exitPrice) || !Number.isFinite(r)) {
+        const closedAt = new Date(signal.expiresAt);
+        recordEvent("UNDECIDABLE", closedAt, null, {
+          reason: "non-finite realized result",
+          entryFilled: true,
+        });
+        return {
+          ...base,
+          entryFilled: true,
+          status: "undecidable",
+          closedAt,
+        };
+      }
       const closedAt = new Date(c.openTime);
       recordEvent("CLOSED", closedAt, exitPrice, {
         status,
@@ -262,8 +317,8 @@ export function verifySignal(
   if (now > signal.expiresAt.getTime()) {
     // If our candle coverage doesn't reach expiry, we cannot honestly grade
     const lastTapeTime = tape[tape.length - 1].openTime;
-    if (lastTapeTime < signal.expiresAt.getTime() - 86_400_000) {
-      const closedAt = new Date();
+    if (lastTapeTime + TF_MS[signal.timeframe] < signal.expiresAt.getTime()) {
+      const closedAt = new Date(signal.expiresAt);
       recordEvent("UNDECIDABLE", closedAt, null, { entryFilled: filled });
       return { ...base, entryFilled: filled, status: "undecidable", closedAt };
     }

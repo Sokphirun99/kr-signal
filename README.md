@@ -94,8 +94,9 @@ CRON_SECRET    required by POST /api/cron/pipeline
 APP_ID         optional; defaults to kr-signal
 ```
 
-Apply committed migrations before deploying server code that depends on new
-columns or tables.
+Apply the canonical `supabase/migrations` history before deploying server code
+that depends on new columns or tables. See `docs/database-migrations.md` for the
+non-destructive production baseline procedure.
 
 ## Validation
 

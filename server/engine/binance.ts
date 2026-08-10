@@ -70,7 +70,7 @@ export async function fetchKlines(
     source,
     `${source === "futures" ? "/fapi/v1/klines" : "/api/v3/klines"}?symbol=${pair}&interval=${interval}&limit=${limit}`
   );
-  return raw.map(k => ({
+  const candles = raw.map(k => ({
     openTime: Number(k[0]),
     open: Number(k[1]),
     high: Number(k[2]),
@@ -78,6 +78,30 @@ export async function fetchKlines(
     close: Number(k[4]),
     volume: Number(k[5]),
   }));
+  const invalid = candles.find(
+    candle =>
+      ![
+        candle.openTime,
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close,
+        candle.volume,
+      ].every(Number.isFinite) ||
+      candle.openTime < 0 ||
+      candle.open <= 0 ||
+      candle.high <= 0 ||
+      candle.low <= 0 ||
+      candle.close <= 0 ||
+      candle.low > candle.high ||
+      candle.open < candle.low ||
+      candle.open > candle.high ||
+      candle.close < candle.low ||
+      candle.close > candle.high ||
+      candle.volume < 0
+  );
+  if (invalid) throw new Error("Binance returned an invalid kline payload");
+  return candles;
 }
 
 interface KlineCacheEntry {
@@ -136,13 +160,21 @@ export async function fetchTicker24h(
     source,
     `${source === "futures" ? "/fapi/v1/ticker/24hr" : "/api/v3/ticker/24hr"}?symbol=${pair}`
   );
-  return {
+  const ticker = {
     pair,
     lastPrice: Number(raw.lastPrice),
     priceChangePct: Number(raw.priceChangePercent),
     volume: Number(raw.volume),
     quoteVolume: Number(raw.quoteVolume),
   };
+  if (
+    !Object.values(ticker).every(
+      value => typeof value === "string" || Number.isFinite(value)
+    )
+  ) {
+    throw new Error("Binance returned an invalid ticker payload");
+  }
+  return ticker;
 }
 
 export async function fetchAllTickers(
