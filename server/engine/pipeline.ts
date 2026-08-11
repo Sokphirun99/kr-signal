@@ -42,6 +42,11 @@ import {
 } from "../queries/pipelineLease";
 import { isUniqueViolation } from "../lib/postgresError";
 import { getEngineConfigSnapshot } from "../config/engineConfig";
+import {
+  AI_FORECAST_CONTEXT_CANDLES,
+  getAiForecast,
+  isAiForecastEnabled,
+} from "./aiForecast";
 
 let running = false;
 
@@ -388,6 +393,38 @@ export async function runPipeline(
                 } else {
                   if (fundingNote) note = fundingNote;
 
+                  let strategyContext: Record<string, unknown> = setup.context;
+                  if (
+                    instrument.market === "crypto" &&
+                    isAiForecastEnabled()
+                  ) {
+                    try {
+                      const forecastCandles =
+                        candles.length >= AI_FORECAST_CONTEXT_CANDLES
+                          ? candles
+                          : await fetchClosedKlines(
+                              instrument.pair,
+                              timeframe,
+                              600,
+                              instrument.dataSource
+                            );
+                      const aiForecast = await getAiForecast(
+                        {
+                          symbol: instrument.symbol,
+                          timeframe,
+                          candles: forecastCandles,
+                        },
+                        { signal }
+                      );
+                      if (aiForecast) {
+                        strategyContext = { ...setup.context, aiForecast };
+                      }
+                    } catch {
+                      // Optional market-data or Space failures must not block rules.
+                    }
+                    assertPipelineActive(signal);
+                  }
+
                   const row: InsertSignal = {
                     symbol: instrument.symbol,
                     market: instrument.market,
@@ -400,7 +437,7 @@ export async function runPipeline(
                     tp2: setup.tp2,
                     tp3: setup.tp3,
                     confidence: gate.confidence,
-                    strategyContext: setup.context,
+                    strategyContext,
                     engineConfigVersion: engineSnapshot.version,
                     engine: "rules",
                     setupAt: new Date(setup.setupAt),

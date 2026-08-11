@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { optionalNumber } from "./signalFormat";
+import { parseAiForecastSnapshot } from "@contracts/aiForecast";
 
 interface LevelCardProps {
   label: string;
@@ -246,6 +247,72 @@ interface SignalLevelsProps {
   decimals: number;
 }
 
+function SignalAiForecast({
+  signal,
+  decimals,
+}: SignalLevelsProps) {
+  const forecast = parseAiForecastSnapshot(
+    signal.strategyContext?.aiForecast
+  );
+  if (!forecast) return null;
+
+  const directionCls =
+    forecast.direction === "bullish"
+      ? "text-emerald-400"
+      : forecast.direction === "bearish"
+        ? "text-red-400"
+        : "text-zinc-400";
+
+  return (
+    <section className="mt-4 rounded-lg border border-violet-400/15 bg-violet-500/[0.04] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-300">
+              Experimental AI outlook
+            </p>
+            <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-200">
+              Shadow only
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-zinc-500">
+            Granite TTM snapshot at setup · never changes the rule decision
+          </p>
+        </div>
+        <span className={cn("text-xs font-semibold capitalize", directionCls)}>
+          {forecast.direction}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <AnalysisMetric
+          label="Forecast close"
+          value={formatPrice(forecast.forecastPrice, decimals)}
+          detail={`${forecast.horizonCandles} × ${signal.timeframe} candles`}
+        />
+        <AnalysisMetric
+          label="Expected move"
+          value={`${forecast.expectedChangePct >= 0 ? "+" : ""}${forecast.expectedChangePct.toFixed(2)}%`}
+          detail="Model estimate"
+        />
+        <AnalysisMetric
+          label="Forecast range"
+          value={`${formatPrice(forecast.rangeLow, decimals)}–${formatPrice(
+            forecast.rangeHigh,
+            decimals
+          )}`}
+          detail="Predicted closes"
+        />
+        <AnalysisMetric
+          label="Path agreement"
+          value={`${Math.round(forecast.pathAgreement * 100)}%`}
+          detail="Steps matching outlook"
+        />
+      </div>
+    </section>
+  );
+}
+
 /**
  * Renders the Entry, Stop Loss, TP1-3 levels, and R:R ratio in distinct containerized boxes.
  * Inputs: props containing ClientSignal and price decimals.
@@ -327,6 +394,8 @@ export function SignalLevels({ signal, decimals }: SignalLevelsProps) {
           subtitleType="reward"
         />
       </div>
+
+      <SignalAiForecast signal={signal} decimals={decimals} />
 
       {/* Live Technical Analysis Panel */}
       <SignalTechnicalAnalysis

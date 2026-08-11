@@ -32,6 +32,9 @@ dist-ssr
 *.sqlite3
 # TypeScript cache
 *.tsbuildinfo
+# Python cache
+__pycache__/
+*.py[cod]
 # Build outputs
 dist/
 build/

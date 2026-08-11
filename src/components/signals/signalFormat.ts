@@ -142,6 +142,9 @@ export function normalizeSignal(
     tp3: Number(raw.tp3 ?? 0),
     entryFilled: Boolean(raw.entryFilled ?? raw.entry_filled ?? false),
     confidence: Number(raw.confidence ?? 0),
+    strategyContext: (raw.strategyContext ??
+      raw.strategy_context ??
+      null) as Record<string, unknown> | null,
     rMultiple: (raw.rMultiple ?? raw.r_multiple ?? null) as number | null,
     exitPrice: (raw.exitPrice ?? raw.exit_price ?? null) as number | null,
     openedAt,
