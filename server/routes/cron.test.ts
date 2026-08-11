@@ -178,6 +178,8 @@ describe("cron lifecycle isolation", () => {
       workflow.indexOf("/api/cron/pipeline")
     );
     expect(workflow).not.toContain("--retry");
+    expect(workflow).not.toContain("-X POST");
+    expect(workflow.match(/--request GET/g)).toHaveLength(2);
     expect(workflow.match(/if test "\$code" != "200"/g)).toHaveLength(2);
     expect(workflow.match(/curl_exit=\$\?/g)).toHaveLength(2);
     expect(workflow.match(/::error title=/g)).toHaveLength(4);

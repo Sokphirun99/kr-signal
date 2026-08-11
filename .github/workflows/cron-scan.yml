@@ -14,7 +14,7 @@ jobs:
         run: |
           set +e
           code=$(curl -sS -o /tmp/verify.json -w "%{http_code}" \
-            --connect-timeout 10 --max-time 90 -X POST \
+            --connect-timeout 10 --max-time 90 --request GET \
             https://kr-signal.vercel.app/api/cron/verify \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           curl_exit=$?
@@ -39,7 +39,7 @@ jobs:
         run: |
           set +e
           code=$(curl -sS -o /tmp/scan.json -w "%{http_code}" \
-            --connect-timeout 10 --max-time 110 -X POST \
+            --connect-timeout 10 --max-time 110 --request GET \
             https://kr-signal.vercel.app/api/cron/pipeline \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           curl_exit=$?
