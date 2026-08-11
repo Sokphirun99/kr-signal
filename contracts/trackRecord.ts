@@ -26,9 +26,33 @@ export interface TrackRecord {
   currentStreak: number;
   firstOutcomeAt: Date | null;
   lastOutcomeAt: Date | null;
-  byMarket: { market: string; closed: number; wins: number; winRate: number | null }[];
-  byMonth: { month: string; closed: number; wins: number; winRate: number | null }[];
+  byMarket: {
+    market: string;
+    closed: number;
+    wins: number;
+    winRate: number | null;
+  }[];
+  byMonth: {
+    month: string;
+    closed: number;
+    wins: number;
+    winRate: number | null;
+  }[];
   equityCurve: EquityCurvePoint[];
+}
+
+export const MAX_EQUITY_CURVE_POINTS = 500;
+
+function downsampleEquityCurve(
+  points: EquityCurvePoint[],
+  maxPoints = MAX_EQUITY_CURVE_POINTS
+): EquityCurvePoint[] {
+  if (points.length <= maxPoints) return points;
+  const lastIndex = points.length - 1;
+  return Array.from({ length: maxPoints }, (_, index) => {
+    const sourceIndex = Math.round((index * lastIndex) / (maxPoints - 1));
+    return points[sourceIndex];
+  });
 }
 
 /**
@@ -42,7 +66,7 @@ export interface TrackRecord {
  */
 export function computeTrackRecordFromSignals(
   rows: ClosedSignalRow[],
-  countsOverride?: { undecidable?: number; expired?: number },
+  countsOverride?: { undecidable?: number; expired?: number }
 ): TrackRecord {
   const closedSignals: {
     status: SignalStatus;
@@ -77,20 +101,22 @@ export function computeTrackRecordFromSignals(
     return timeA - timeB;
   });
 
-  const wins = closedSignals.filter((s) => WIN_STATUSES.includes(s.status));
+  const wins = closedSignals.filter(s => WIN_STATUSES.includes(s.status));
   const nonWins = closedSignals.length - wins.length;
-  const winRate = closedSignals.length ? wins.length / closedSignals.length : null;
+  const winRate = closedSignals.length
+    ? wins.length / closedSignals.length
+    : null;
 
   const totalR = closedSignals.reduce((acc, s) => acc + s.rMultiple, 0);
   const avgR = closedSignals.length ? totalR / closedSignals.length : null;
 
   const grossWin = closedSignals
-    .filter((s) => s.rMultiple > 0)
+    .filter(s => s.rMultiple > 0)
     .reduce((acc, s) => acc + s.rMultiple, 0);
   const grossLoss = Math.abs(
     closedSignals
-      .filter((s) => s.rMultiple < 0)
-      .reduce((acc, s) => acc + s.rMultiple, 0),
+      .filter(s => s.rMultiple < 0)
+      .reduce((acc, s) => acc + s.rMultiple, 0)
   );
   const profitFactor = grossLoss > 0 ? grossWin / grossLoss : null;
 
@@ -109,7 +135,8 @@ export function computeTrackRecordFromSignals(
   for (let i = closedSignals.length - 1; i >= 0; i--) {
     const isWin = WIN_STATUSES.includes(closedSignals[i].status);
     if (currentStreak === 0) currentStreak = isWin ? 1 : -1;
-    else if ((currentStreak > 0) === isWin) currentStreak += currentStreak > 0 ? 1 : -1;
+    else if (currentStreak > 0 === isWin)
+      currentStreak += currentStreak > 0 ? 1 : -1;
     else break;
   }
 
@@ -132,7 +159,7 @@ export function computeTrackRecordFromSignals(
   }
 
   let cumulative = 0;
-  const equityCurve: EquityCurvePoint[] = closedSignals.map((s) => {
+  const equityCurve: EquityCurvePoint[] = closedSignals.map(s => {
     const tradeR = Math.round(s.rMultiple * 100) / 100;
     cumulative = Math.round((cumulative + tradeR) * 100) / 100;
     return {
@@ -151,7 +178,8 @@ export function computeTrackRecordFromSignals(
     winRate,
     totalR: Math.round(totalR * 100) / 100,
     avgR: avgR === null ? null : Math.round(avgR * 100) / 100,
-    profitFactor: profitFactor === null ? null : Math.round(profitFactor * 100) / 100,
+    profitFactor:
+      profitFactor === null ? null : Math.round(profitFactor * 100) / 100,
     bestStreak,
     currentStreak,
     firstOutcomeAt: closedSignals[0]?.closedAt ?? null,
@@ -168,6 +196,6 @@ export function computeTrackRecordFromSignals(
         ...v,
         winRate: v.closed ? v.wins / v.closed : null,
       })),
-    equityCurve,
+    equityCurve: downsampleEquityCurve(equityCurve),
   };
 }

@@ -1,7 +1,13 @@
 import { matchSymbolsForText, type NewsItem } from "@contracts/news";
 import { parseUtcDate } from "@contracts/instruments";
 import type { NewsSource } from "../types";
-import { FEED_TIMEOUT_MS, SOURCE_CACHE_TTL_MS, MAX_SUMMARY_LENGTH } from "../types";
+import {
+  FEED_TIMEOUT_MS,
+  SOURCE_CACHE_TTL_MS,
+  MAX_SUMMARY_LENGTH,
+  MAX_RSS_ITEMS_PER_FEED,
+  MAX_RSS_RESPONSE_BYTES,
+} from "../types";
 
 export interface FeedConfig {
   name: string;
@@ -59,7 +65,7 @@ export function stripHtmlTags(html: string): string {
  */
 export function truncateSummary(
   text: string | null,
-  maxLength = MAX_SUMMARY_LENGTH,
+  maxLength = MAX_SUMMARY_LENGTH
 ): string | null {
   if (!text) return null;
   const clean = text.trim();
@@ -79,14 +85,14 @@ function extractTagContent(chunk: string, tags: string[]): string | null {
   for (const tag of tags) {
     const contentMatch = new RegExp(
       `<${tag}(?:\\s+[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,
-      "i",
+      "i"
     ).exec(chunk);
     if (contentMatch?.[1]) {
       return contentMatch[1];
     }
     const attrMatch = new RegExp(
       `<${tag}[^>]*\\bhref=["']([^"']+)["']`,
-      "i",
+      "i"
     ).exec(chunk);
     if (attrMatch?.[1]) {
       return attrMatch[1];
@@ -133,20 +139,29 @@ export function extractImageUrl(chunk: string): string | null {
 export function parseRssFeed(xml: string, sourceName: string): NewsItem[] {
   if (!xml || typeof xml !== "string") return [];
 
-  const itemRegex = /<(?:item|entry)(?:[\s>][\s\S]*?<\/(?:item|entry)>|[\s\S]*?$)/gi;
+  const itemRegex =
+    /<(?:item|entry)(?:[\s>][\s\S]*?<\/(?:item|entry)>|[\s\S]*?$)/gi;
   const matches = xml.match(itemRegex) ?? [];
   const items: NewsItem[] = [];
 
-  for (const chunk of matches) {
+  for (const chunk of matches.slice(0, MAX_RSS_ITEMS_PER_FEED)) {
     const rawTitle = extractTagContent(chunk, ["title"]) ?? "";
     const rawLink = extractTagContent(chunk, ["link", "guid"]) ?? "";
     const rawPubDate =
-      extractTagContent(chunk, ["pubDate", "dc:date", "published", "updated"]) ?? "";
+      extractTagContent(chunk, [
+        "pubDate",
+        "dc:date",
+        "published",
+        "updated",
+      ]) ?? "";
     const rawDesc =
-      extractTagContent(chunk, ["description", "content:encoded", "summary"]) ?? "";
+      extractTagContent(chunk, ["description", "content:encoded", "summary"]) ??
+      "";
 
     const title = decodeXmlEntities(rawTitle);
-    const url = decodeXmlEntities(rawLink).replace(/<[^>]*>/g, "").trim();
+    const url = decodeXmlEntities(rawLink)
+      .replace(/<[^>]*>/g, "")
+      .trim();
     if (!title || !url) continue;
 
     const summaryText = stripHtmlTags(rawDesc);
@@ -171,6 +186,40 @@ export function parseRssFeed(xml: string, sourceName: string): NewsItem[] {
   return items;
 }
 
+async function readBoundedText(
+  response: Response,
+  maxBytes = MAX_RSS_RESPONSE_BYTES
+): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error("RSS response exceeded the maximum allowed size.");
+  }
+
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel();
+      throw new Error("RSS response exceeded the maximum allowed size.");
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /**
  * Fetches and parses a single RSS news feed with timeout protection.
  * Inputs: feed url, source name.
@@ -180,7 +229,7 @@ export function parseRssFeed(xml: string, sourceName: string): NewsItem[] {
  */
 export async function fetchNewsFeed(
   url: string,
-  sourceName: string,
+  sourceName: string
 ): Promise<NewsItem[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
@@ -188,14 +237,18 @@ export async function fetchNewsFeed(
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: "application/rss+xml, application/xml, text/xml, */*" },
+      headers: {
+        Accept: "application/rss+xml, application/xml, text/xml, */*",
+      },
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} fetching RSS from ${sourceName}`);
+      throw new Error(
+        `HTTP ${response.status} fetching RSS from ${sourceName}`
+      );
     }
 
-    const xml = await response.text();
+    const xml = await readBoundedText(response);
     return parseRssFeed(xml, sourceName);
   } finally {
     clearTimeout(timer);
@@ -228,7 +281,7 @@ export class RssNewsSource implements NewsSource {
 
     try {
       const settled = await Promise.allSettled(
-        RSS_FEEDS.map((feed) => fetchNewsFeed(feed.url, feed.name)),
+        RSS_FEEDS.map(feed => fetchNewsFeed(feed.url, feed.name))
       );
 
       const items: NewsItem[] = [];

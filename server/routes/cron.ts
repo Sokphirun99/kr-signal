@@ -77,6 +77,11 @@ function timeoutResponse(c: Context, error: CronResponseTimeoutError) {
   );
 }
 
+function safeReport<T extends { errors: string[] }>(report: T) {
+  const { errors, ...summary } = report;
+  return { ...summary, errorCount: errors.length };
+}
+
 function authorizeCron(c: Context): Response | null {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -111,9 +116,9 @@ export async function handleCronVerification(c: Context) {
       errors: report.errors.length,
     });
     if (report.errors.length > 0) {
-      return c.json({ ok: false, report }, 503);
+      return c.json({ ok: false, report: safeReport(report) }, 503);
     }
-    return c.json({ ok: true, report }, 200);
+    return c.json({ ok: true, report: safeReport(report) }, 200);
   } catch (error) {
     if (error instanceof CronResponseTimeoutError) {
       return timeoutResponse(c, error);
@@ -145,9 +150,9 @@ export async function handleCronPipeline(c: Context) {
       (report.scanTargets > 0 && report.failures.scan >= report.scanTargets) ||
       report.timeframesScanned === 0;
     if (criticalFailure) {
-      return c.json({ ok: false, report }, 503);
+      return c.json({ ok: false, report: safeReport(report) }, 503);
     }
-    return c.json({ ok: true, report }, 200);
+    return c.json({ ok: true, report: safeReport(report) }, 200);
   } catch (error) {
     if (error instanceof CronResponseTimeoutError) {
       return timeoutResponse(c, error);
@@ -172,12 +177,15 @@ export async function handleCronMaintenance(c: Context) {
       fetched: report.fetched,
       stored: report.stored,
     });
-    return c.json({ ok: true, report }, 200);
+    return c.json({ ok: true, report: safeReport(report) }, 200);
   } catch (error) {
     if (error instanceof CronResponseTimeoutError) {
       return timeoutResponse(c, error);
     }
     console.error("[maintenance] pass failed", error);
-    return c.json({ ok: false, error: String(error) }, 503);
+    return c.json(
+      { ok: false, error: { code: "MAINTENANCE_PASS_FAILED" } },
+      503
+    );
   }
 }

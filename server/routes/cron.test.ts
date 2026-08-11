@@ -108,7 +108,9 @@ describe("cron lifecycle isolation", () => {
 
   it("returns a scheduler-visible failure when verification is incomplete", async () => {
     mocks.verify.mockResolvedValue(
-      verificationReport(["market data unavailable"])
+      verificationReport([
+        "database host internal.example: credential sentinel",
+      ])
     );
 
     const response = await app.request("/api/cron/verify", {
@@ -117,6 +119,10 @@ describe("cron lifecycle isolation", () => {
     });
 
     expect(response.status).toBe(503);
+    const bodyText = await response.text();
+    expect(bodyText).not.toContain("internal.example");
+    expect(bodyText).not.toContain("credential sentinel");
+    expect(JSON.parse(bodyText).report.errorCount).toBe(1);
   });
 
   it("returns a JSON 504 before Vercel can terminate a stuck verifier", async () => {
@@ -183,6 +189,7 @@ describe("cron lifecycle isolation", () => {
     expect(workflow.match(/if test "\$code" != "200"/g)).toHaveLength(2);
     expect(workflow.match(/curl_exit=\$\?/g)).toHaveLength(2);
     expect(workflow.match(/::error title=/g)).toHaveLength(4);
+    expect(workflow).not.toContain("cat /tmp/");
   });
 
   it("keeps verification and maintenance out of the scan pipeline", () => {

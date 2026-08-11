@@ -22,7 +22,7 @@ jobs:
           echo "curl exit $curl_exit"
           echo "HTTP $code"
           if test -s /tmp/maintenance.json; then
-            cat /tmp/maintenance.json
+            echo "Maintenance response body received; details remain in private Vercel logs"
           else
             echo "No response body received"
           fi

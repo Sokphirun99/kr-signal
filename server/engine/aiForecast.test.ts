@@ -50,19 +50,28 @@ describe("Hugging Face AI forecast client", () => {
         new Response(JSON.stringify({ event_id: "event-1" }), { status: 200 })
       )
       .mockResolvedValueOnce(
-        new Response(`event: complete\ndata: ${JSON.stringify([snapshot()])}\n\n`, {
-          status: 200,
-        })
+        new Response(
+          `event: complete\ndata: ${JSON.stringify([snapshot()])}\n\n`,
+          {
+            status: 200,
+          }
+        )
       );
 
     const result = await requestAiForecast(
       { symbol: "BTCUSDT", timeframe: "15m", candles: candles() },
-      { fetchImpl, spaceUrl: "https://example.hf.space", timeoutMs: 1_000 }
+      {
+        fetchImpl,
+        sharedSecret: "test-shared-secret",
+        spaceUrl: "https://example.hf.space",
+        timeoutMs: 1_000,
+      }
     );
 
     expect(result.direction).toBe("bullish");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const queuedBody = JSON.parse(fetchImpl.mock.calls[0][1]?.body as string);
+    expect(queuedBody.data[0].authToken).toBe("test-shared-secret");
     expect(queuedBody.data[0].candles).toHaveLength(512);
   });
 
@@ -81,7 +90,11 @@ describe("Hugging Face AI forecast client", () => {
     await expect(
       requestAiForecast(
         { symbol: "BTCUSDT", timeframe: "15m", candles: candles() },
-        { fetchImpl, spaceUrl: "https://example.hf.space" }
+        {
+          fetchImpl,
+          sharedSecret: "test-shared-secret",
+          spaceUrl: "https://example.hf.space",
+        }
       )
     ).rejects.toThrow("invalid forecast");
   });
@@ -122,6 +135,7 @@ describe("Hugging Face AI forecast client", () => {
         { symbol: "BTCUSDT", timeframe: "15m", candles: candles() },
         {
           fetchImpl,
+          sharedSecret: "test-shared-secret",
           signal: parent.signal,
           spaceUrl: "https://example.hf.space",
         }

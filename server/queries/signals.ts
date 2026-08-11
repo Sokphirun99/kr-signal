@@ -13,7 +13,7 @@ import {
   type SignalStatus,
 } from "@contracts/instruments";
 
-const VALID_SYMBOLS = INSTRUMENTS.map((i) => i.symbol);
+const VALID_SYMBOLS = INSTRUMENTS.map(i => i.symbol);
 
 export async function listSignals(filters?: {
   symbol?: string | null;
@@ -25,7 +25,8 @@ export async function listSignals(filters?: {
   const conditions = [inArray(signals.symbol, VALID_SYMBOLS)];
   if (filters?.symbol) conditions.push(eq(signals.symbol, filters.symbol));
   if (filters?.status) conditions.push(eq(signals.status, filters.status));
-  if (filters?.closedOnly) conditions.push(inArray(signals.status, CLOSED_STATUSES));
+  if (filters?.closedOnly)
+    conditions.push(inArray(signals.status, CLOSED_STATUSES));
   if (filters?.historyOnly) conditions.push(ne(signals.status, "open"));
 
   return await getDb()
@@ -52,17 +53,30 @@ export async function getSignalById(id: number): Promise<Signal | null> {
   return rows[0] ?? null;
 }
 
-import { computeTrackRecordFromSignals, type TrackRecord } from "@contracts/trackRecord";
+import {
+  computeTrackRecordFromSignals,
+  type TrackRecord,
+} from "@contracts/trackRecord";
 export type { TrackRecord, EquityCurvePoint } from "@contracts/trackRecord";
 
 export async function computeTrackRecord(): Promise<TrackRecord> {
   const db = getDb();
   const validSignals = await db
-    .select()
+    .select({
+      status: signals.status,
+      rMultiple: signals.rMultiple,
+      market: signals.market,
+      closedAt: signals.closedAt,
+    })
     .from(signals)
-    .where(and(inArray(signals.symbol, VALID_SYMBOLS), inArray(signals.status, TERMINAL_STATUSES)));
+    .where(
+      and(
+        inArray(signals.symbol, VALID_SYMBOLS),
+        inArray(signals.status, TERMINAL_STATUSES)
+      )
+    );
 
-  const closedRows: ClosedSignalRow[] = validSignals.map((s) => ({
+  const closedRows: ClosedSignalRow[] = validSignals.map(s => ({
     status: s.status as SignalStatus,
     rMultiple: Number(s.rMultiple ?? 0),
     market: s.market,
@@ -116,7 +130,9 @@ export async function pruneScanRunsOlderThan14Days(): Promise<number> {
       .returning({ id: scanRuns.id });
 
     if (deleted.length > 0) {
-      console.log(`[funnel] Pruned ${deleted.length} obsolete scan_runs older than 14 days.`);
+      console.log(
+        `[funnel] Pruned ${deleted.length} obsolete scan_runs older than 14 days.`
+      );
     }
     return deleted.length;
   } catch (err) {

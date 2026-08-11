@@ -21,3 +21,5 @@ export const AGGREGATOR_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 export const SOURCE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 export const MAX_AGGREGATED_NEWS = 150;
 export const MAX_SUMMARY_LENGTH = 240;
+export const MAX_RSS_RESPONSE_BYTES = 1024 * 1024;
+export const MAX_RSS_ITEMS_PER_FEED = 100;

@@ -5,7 +5,9 @@ import numpy as np
 from forecast_logic import (
     CONTEXT_LENGTH,
     FREQUENCY_TOKENS,
+    MODEL_COMMIT_SHA,
     MODEL_REVISION,
+    require_shared_secret,
     summarize_prediction,
     validate_payload,
 )
@@ -24,6 +26,16 @@ def candle(index: int) -> dict:
 
 
 class ForecastLogicTests(unittest.TestCase):
+    def test_pins_an_immutable_model_commit(self) -> None:
+        self.assertRegex(MODEL_COMMIT_SHA, r"^[0-9a-f]{40}$")
+
+    def test_requires_the_server_shared_secret(self) -> None:
+        require_shared_secret({"authToken": "expected"}, "expected")
+        with self.assertRaisesRegex(ValueError, "Unauthorized"):
+            require_shared_secret({"authToken": "wrong"}, "expected")
+        with self.assertRaisesRegex(ValueError, "Unauthorized"):
+            require_shared_secret({"authToken": "expected"}, None)
+
     def test_validates_and_shapes_completed_candles(self) -> None:
         payload = {
             "symbol": "BTCUSDT",

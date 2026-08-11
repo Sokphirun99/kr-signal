@@ -4,6 +4,7 @@ import {
   setPublicReadCache,
   type TrpcContext,
 } from "./context";
+import app from "./boot";
 
 function createTestContext(): TrpcContext {
   return {
@@ -49,5 +50,23 @@ describe("public read cache policy", () => {
     expect(ctx.resHeaders.get("Cache-Control")).toBe("private, no-store");
     expect(ctx.resHeaders.has("CDN-Cache-Control")).toBe(false);
     expect(ctx.resHeaders.has("Vercel-CDN-Cache-Control")).toBe(false);
+  });
+});
+
+describe("public tRPC request limits", () => {
+  it("rejects batch amplification", async () => {
+    const response = await app.request("/api/trpc/ping,ping?batch=1");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects oversized JSON before parsing", async () => {
+    const response = await app.request("/api/trpc/ping", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input: "x".repeat(70 * 1024) }),
+    });
+
+    expect(response.status).toBe(413);
   });
 });

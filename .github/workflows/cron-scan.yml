@@ -22,7 +22,7 @@ jobs:
           echo "curl exit $curl_exit"
           echo "HTTP $code"
           if test -s /tmp/verify.json; then
-            cat /tmp/verify.json
+            echo "Verification response body received; details remain in private Vercel logs"
           else
             echo "No response body received"
           fi
@@ -47,7 +47,7 @@ jobs:
           echo "curl exit $curl_exit"
           echo "HTTP $code"
           if test -s /tmp/scan.json; then
-            cat /tmp/scan.json
+            echo "Pipeline response body received; details remain in private Vercel logs"
           else
             echo "No response body received"
           fi

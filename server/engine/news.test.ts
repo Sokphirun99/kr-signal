@@ -2,10 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { matchSymbolsForText } from "@contracts/news";
-import { getNews, fetchNewsFeed } from "./news/index";
-import { CryptoPanicNewsSource, mapCryptoPanicSymbols } from "./news/sources/cryptopanic";
+import { getNews, fetchNewsFeed, parseRssFeed } from "./news/index";
+import {
+  CryptoPanicNewsSource,
+  mapCryptoPanicSymbols,
+} from "./news/sources/cryptopanic";
 import { CryptoCompareNewsSource } from "./news/sources/cryptocompare";
 import { RssNewsSource } from "./news/sources/rss";
+import { MAX_RSS_ITEMS_PER_FEED, MAX_RSS_RESPONSE_BYTES } from "./news/types";
 
 describe("matchSymbolsForText", () => {
   it("matches Bitcoin correctly to BTCUSDT", () => {
@@ -14,12 +18,16 @@ describe("matchSymbolsForText", () => {
   });
 
   it("matches Ethereum correctly to ETHUSDT", () => {
-    const symbols = matchSymbolsForText("Ethereum upgrade scheduled for next month");
+    const symbols = matchSymbolsForText(
+      "Ethereum upgrade scheduled for next month"
+    );
     expect(symbols).toContain("ETHUSDT");
   });
 
   it("matches Gold keywords correctly to XAUUSD", () => {
-    const symbols = matchSymbolsForText("Gold spot demand increases amid central bank buying");
+    const symbols = matchSymbolsForText(
+      "Gold spot demand increases amid central bank buying"
+    );
     expect(symbols).toContain("XAUUSD");
   });
 
@@ -27,13 +35,19 @@ describe("matchSymbolsForText", () => {
     const eur = matchSymbolsForText("EUR/USD rises after ECB rate commentary");
     expect(eur).toContain("EURUSD");
 
-    const gbp = matchSymbolsForText("Pound sterling holds ground following Bank of England decision");
+    const gbp = matchSymbolsForText(
+      "Pound sterling holds ground following Bank of England decision"
+    );
     expect(gbp).toContain("GBPUSD");
   });
 
   it("prevents false positive substring matches", () => {
-    expect(matchSymbolsForText("The method is robust")).not.toContain("ETHUSDT");
-    expect(matchSymbolsForText("Golden cross in technical analysis")).not.toContain("XAUUSD");
+    expect(matchSymbolsForText("The method is robust")).not.toContain(
+      "ETHUSDT"
+    );
+    expect(
+      matchSymbolsForText("Golden cross in technical analysis")
+    ).not.toContain("XAUUSD");
   });
 });
 
@@ -151,7 +165,7 @@ describe("Aggregator Resilience & Caching", () => {
     ]);
 
     vi.spyOn(CryptoCompareNewsSource.prototype, "fetch").mockRejectedValueOnce(
-      new Error("CryptoCompare rate limited or down"),
+      new Error("CryptoCompare rate limited or down")
     );
 
     const news = await getNews(true);
@@ -166,8 +180,34 @@ describe("Aggregator Resilience & Caching", () => {
     } as Response);
 
     await expect(
-      fetchNewsFeed("https://example.com/bad-rss", "BadFeed"),
+      fetchNewsFeed("https://example.com/bad-rss", "BadFeed")
     ).rejects.toThrow("HTTP 503");
+  });
+
+  it("rejects an oversized RSS body before parsing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("oversized", {
+        headers: {
+          "content-length": String(MAX_RSS_RESPONSE_BYTES + 1),
+        },
+      })
+    );
+
+    await expect(
+      fetchNewsFeed("https://example.com/large-rss", "LargeFeed")
+    ).rejects.toThrow("maximum allowed size");
+  });
+
+  it("caps RSS items before normalization and aggregation", () => {
+    const xml = Array.from(
+      { length: MAX_RSS_ITEMS_PER_FEED + 5 },
+      (_, index) =>
+        `<item><title>Bitcoin item ${index}</title><link>https://example.com/${index}</link><pubDate>2026-08-08T01:00:00Z</pubDate></item>`
+    ).join("");
+
+    expect(parseRssFeed(`<rss>${xml}</rss>`, "BoundedFeed")).toHaveLength(
+      MAX_RSS_ITEMS_PER_FEED
+    );
   });
 
   it("statically verifies news modules are NEVER imported by strategy.ts, gate.ts, or verifier.ts", () => {

@@ -24,3 +24,7 @@ or unavailable.
 
 Input: a symbol, a `15m`, `1h`, or `4h` timeframe, and at least 512 completed
 candles ordered oldest to newest.
+
+Set `HF_AI_SHARED_SECRET` as a private Space secret and set the same value in
+the KR-Signal server environment. Requests are rejected before GPU allocation
+when this credential is missing or invalid.

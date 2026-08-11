@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -29,12 +30,14 @@ app.post("/api/scan", handleCronPipeline);
 
 app.route("/api/v1", publicApi);
 
+app.use("/api/trpc/*", bodyLimit({ maxSize: 64 * 1024 }));
 app.use("/api/trpc/*", async c => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
     req: c.req.raw,
     router: appRouter,
     createContext,
+    allowBatching: false,
     responseMeta({ ctx, errors }) {
       if (ctx?.resHeaders) {
         if (errors.length > 0) {
@@ -51,6 +54,9 @@ app.use("/api/trpc/*", async c => {
 });
 
 app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
   console.error("Hono error:", err);
   return c.json({ error: "Internal Server Error" }, 500);
 });

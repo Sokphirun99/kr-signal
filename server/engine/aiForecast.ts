@@ -8,8 +8,7 @@ import {
 import type { Candle } from "./binance";
 
 export const AI_FORECAST_CONTEXT_CANDLES = 512;
-export const DEFAULT_AI_SPACE_URL =
-  "https://phirun99-kr-signal-ai.hf.space";
+export const DEFAULT_AI_SPACE_URL = "https://phirun99-kr-signal-ai.hf.space";
 const DEFAULT_TIMEOUT_MS = 25_000;
 
 interface AiForecastInput {
@@ -25,6 +24,7 @@ type FetchLike = (
 
 interface AiForecastOptions {
   fetchImpl?: FetchLike;
+  sharedSecret?: string;
   signal?: AbortSignal;
   spaceUrl?: string;
   timeoutMs?: number;
@@ -46,7 +46,10 @@ function parseCompleteEvent(body: string): unknown {
   const blocks = body.split(/\r?\n\r?\n/);
   for (const block of blocks) {
     const lines = block.split(/\r?\n/);
-    const event = lines.find(line => line.startsWith("event:"))?.slice(6).trim();
+    const event = lines
+      .find(line => line.startsWith("event:"))
+      ?.slice(6)
+      .trim();
     if (event === "error") throw new Error("Hugging Face forecast failed.");
     if (event !== "complete") continue;
     const data = lines
@@ -71,6 +74,11 @@ export async function requestAiForecast(
   const configuredUrl =
     options.spaceUrl ?? process.env.HF_AI_SPACE_URL ?? DEFAULT_AI_SPACE_URL;
   const spaceUrl = normalizeSpaceUrl(configuredUrl);
+  const sharedSecret =
+    options.sharedSecret ?? process.env.HF_AI_SHARED_SECRET ?? "";
+  if (!sharedSecret) {
+    throw new Error("Hugging Face forecast authentication is not configured.");
+  }
   const fetchImpl = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -86,6 +94,7 @@ export async function requestAiForecast(
 
   try {
     const payload = {
+      authToken: sharedSecret,
       symbol: input.symbol,
       timeframe: input.timeframe,
       candles: input.candles.slice(-AI_FORECAST_CONTEXT_CANDLES),
@@ -114,7 +123,8 @@ export async function requestAiForecast(
     const snapshot = parseAiForecastSnapshot(
       parseCompleteEvent(await completed.text())
     );
-    if (!snapshot) throw new Error("Hugging Face returned an invalid forecast.");
+    if (!snapshot)
+      throw new Error("Hugging Face returned an invalid forecast.");
     if (
       snapshot.symbol !== input.symbol ||
       snapshot.timeframe !== input.timeframe

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hmac
 import math
 import re
 from typing import Any
@@ -16,7 +17,19 @@ FEATURE_NAMES = ("open", "high", "low", "close", "volume")
 HORIZON_CANDLES = {"15m": 16, "1h": 12, "4h": 12}
 FREQUENCY_TOKENS = {"15m": 5, "1h": 7, "4h": 7}
 MODEL_REVISION = "512-48-ft-r2.1"
+MODEL_COMMIT_SHA = "b972f0c22190b7502764526004d16e2b4ed39e8c"
 SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{3,20}$")
+
+
+def require_shared_secret(payload: Any, configured_secret: str | None) -> None:
+    """Reject unauthenticated requests before any GPU allocation occurs."""
+    supplied_secret = payload.get("authToken") if isinstance(payload, dict) else None
+    if (
+        not configured_secret
+        or not isinstance(supplied_secret, str)
+        or not hmac.compare_digest(supplied_secret, configured_secret)
+    ):
+        raise ValueError("Unauthorized forecast request.")
 
 
 def validate_payload(payload: Any) -> tuple[str, str, np.ndarray, int]:
