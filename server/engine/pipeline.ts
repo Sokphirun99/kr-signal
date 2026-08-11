@@ -22,16 +22,12 @@ import {
 import { type Candle, fetchClosedKlines } from "./binance";
 import { generateSetup, HTF_MAP, isHtfVetoed } from "./strategy";
 import { gateSetup } from "./gate";
-import { verifySignal } from "./verifier";
 import {
   fetchFundingRate,
   fetchOpenInterest,
   fetchTakerRatio,
   fetchFearAndGreed,
 } from "./futures";
-import { getNews } from "./news";
-import { upsertNewsBatch, pruneNewsOlderThan7Days } from "../queries/news";
-import { pruneScanRunsOlderThan14Days } from "../queries/signals";
 import { randomUUID } from "node:crypto";
 import {
   PipelineLeaseAcquisitionError,
@@ -47,24 +43,22 @@ import {
   getAiForecast,
   isAiForecastEnabled,
 } from "./aiForecast";
+import { runWithAbortDeadline } from "../lib/deadline";
 
 let running = false;
+export const PIPELINE_TIMEOUT_MS = 75_000;
 
 export interface PassReport {
   scannedAt?: Date;
   scanTargets: number;
   instrumentsScanned: number;
   timeframesScanned: number;
-  verified: number;
-  closed: number;
   candidates: number;
   published: number;
   errors: string[];
   timings: {
     totalMs: number;
-    verificationMs: number;
     scanMs: number;
-    maintenanceMs: number;
   };
   failures: {
     marketData: number;
@@ -72,7 +66,8 @@ export interface PassReport {
     leaseAcquisition: number;
     leaseRelease: number;
     heartbeat: number;
-    news: number;
+    timeout: number;
+    scan: number;
   };
 }
 
@@ -96,19 +91,18 @@ function newPassReport(scannedAt = new Date()): PipelineReport {
     scanTargets: 0,
     instrumentsScanned: 0,
     timeframesScanned: 0,
-    verified: 0,
-    closed: 0,
     candidates: 0,
     published: 0,
     errors: [],
-    timings: { totalMs: 0, verificationMs: 0, scanMs: 0, maintenanceMs: 0 },
+    timings: { totalMs: 0, scanMs: 0 },
     failures: {
       marketData: 0,
       database: 0,
       leaseAcquisition: 0,
       leaseRelease: 0,
       heartbeat: 0,
-      news: 0,
+      timeout: 0,
+      scan: 0,
     },
   };
 }
@@ -132,7 +126,12 @@ export async function forceRunPipelinePass(): Promise<PipelineReport> {
   const leaseOwner = randomUUID();
   try {
     const report = await runWithPipelineLease(leaseOwner, signal =>
-      runPipeline(signal)
+      runWithAbortDeadline(
+        signal,
+        PIPELINE_TIMEOUT_MS,
+        "Pipeline scan",
+        scanSignal => runPipeline(scanSignal)
+      )
     );
     return report;
   } catch (error) {
@@ -150,6 +149,9 @@ export async function forceRunPipelinePass(): Promise<PipelineReport> {
     } else if (error instanceof PipelineLeaseReleaseError) {
       report.failures.leaseRelease++;
       report.errors.push(error.message);
+    } else if (String(error).toLowerCase().includes("deadline")) {
+      report.failures.timeout++;
+      report.errors.push(`Pipeline execution failed: ${String(error)}`);
     } else {
       report.failures.database++;
       report.errors.push(`Pipeline execution failed: ${String(error)}`);
@@ -187,109 +189,8 @@ export async function runPipeline(
     return closedKlineCache.get(key)!;
   }
 
-  // ---- Stage 1: grade open signals against completed candles only --------
-  // Live tickers remain available to the UI, but official performance never
-  // commits a result from a still-mutating candle.
-  console.time("stage1-verify");
-  const verificationStartedAt = Date.now();
-  const openSignals = await getDb()
-    .select()
-    .from(signals)
-    .where(eq(signals.status, "open"));
-
-  for (const sig of openSignals) {
-    assertPipelineActive(signal);
-    const instrument = INSTRUMENTS.find(i => i.symbol === sig.symbol);
-    if (!instrument) {
-      const closedAt = new Date();
-      await getDb().transaction(async tx => {
-        assertPipelineActive(signal);
-        await tx
-          .update(signals)
-          .set({ status: "undecidable", closedAt })
-          .where(eq(signals.id, sig.id));
-        await tx
-          .insert(signalEvents)
-          .values({
-            eventKey: `${sig.id}:UNDECIDABLE:${closedAt.getTime()}:none`,
-            signalId: sig.id,
-            eventType: "UNDECIDABLE",
-            price: null,
-            occurredAt: closedAt,
-            metadata: { reason: "instrument removed from registry" },
-          })
-          .onConflictDoNothing({ target: signalEvents.eventKey });
-      });
-      report.closed++;
-      continue;
-    }
-    let candles: Candle[];
-    try {
-      candles = await klinesFor(
-        instrument.pair,
-        sig.timeframe,
-        instrument.dataSource
-      );
-    } catch (err) {
-      assertPipelineActive(signal);
-      report.failures.marketData++;
-      report.errors.push(
-        `verify market data ${sig.symbol} ${sig.timeframe}: ${String(err)}`
-      );
-      continue;
-    }
-
-    const verdict = verifySignal(sig, candles, engineSnapshot.config);
-    report.verified++;
-    const signalChanged =
-      verdict.status !== "open" || verdict.entryFilled !== sig.entryFilled;
-    if (signalChanged || verdict.events.length > 0) {
-      try {
-        assertPipelineActive(signal);
-        await getDb().transaction(async tx => {
-          if (signalChanged) {
-            await tx
-              .update(signals)
-              .set({
-                status: verdict.status,
-                entryFilled: verdict.entryFilled,
-                exitPrice: verdict.exitPrice,
-                rMultiple: verdict.rMultiple,
-                closedAt: verdict.closedAt,
-              })
-              .where(eq(signals.id, sig.id));
-          }
-          if (verdict.events.length > 0) {
-            await tx
-              .insert(signalEvents)
-              .values(
-                verdict.events.map(event => ({
-                  eventKey: event.eventKey,
-                  signalId: sig.id,
-                  eventType: event.eventType,
-                  price: event.price,
-                  occurredAt: event.occurredAt,
-                  metadata: event.metadata,
-                }))
-              )
-              .onConflictDoNothing({ target: signalEvents.eventKey });
-          }
-        });
-        if (verdict.status !== "open") report.closed++;
-      } catch (err) {
-        assertPipelineActive(signal);
-        report.failures.database++;
-        report.errors.push(
-          `verify database ${sig.symbol} ${sig.timeframe}: ${String(err)}`
-        );
-      }
-    }
-  }
-  report.timings.verificationMs = Date.now() - verificationStartedAt;
-  console.timeEnd("stage1-verify");
-
-  // ---- Stage 2: scan for new setups — timeframes parallelized -------------
-  console.time("stage2-scan");
+  // ---- Scan for new setups — lifecycle verification runs separately ------
+  console.time("stage-scan");
   const scanStartedAt = Date.now();
   const allScanRows: ScanRunRow[] = [];
   const fearAndGreedPromise = INSTRUMENTS.some(i => i.market === "crypto")
@@ -490,6 +391,7 @@ export async function runPipeline(
             assertPipelineActive(signal);
             note = `error: ${String(err)}`;
             report.failures.marketData++;
+            report.failures.scan++;
             report.errors.push(
               `scan ${instrument.symbol} ${timeframe}: ${String(err)}`
             );
@@ -509,7 +411,7 @@ export async function runPipeline(
   report.timings.scanMs = Date.now() - scanStartedAt;
   report.timeframesScanned = allScanRows.length;
   report.instrumentsScanned = new Set(allScanRows.map(row => row.symbol)).size;
-  console.timeEnd("stage2-scan");
+  console.timeEnd("stage-scan");
 
   // ---- Batch-insert scan bookkeeping in one round-trip --------------------
   if (allScanRows.length > 0) {
@@ -525,32 +427,6 @@ export async function runPipeline(
     }
   }
 
-  // ---- Sync fresh news & prune rolling data ------------------------------
-  const maintenanceStartedAt = Date.now();
-  let freshNews: Awaited<ReturnType<typeof getNews>> = [];
-  try {
-    assertPipelineActive(signal);
-    freshNews = await getNews(true);
-  } catch (err) {
-    assertPipelineActive(signal);
-    report.failures.news++;
-    report.errors.push(`news: ${String(err)}`);
-    console.error("[pipeline] News sync error:", err);
-  }
-  try {
-    assertPipelineActive(signal);
-    if (freshNews.length > 0) {
-      await upsertNewsBatch(freshNews);
-    }
-    await pruneNewsOlderThan7Days();
-    await pruneScanRunsOlderThan14Days();
-  } catch (err) {
-    assertPipelineActive(signal);
-    report.failures.database++;
-    report.errors.push(`maintenance database: ${String(err)}`);
-    console.error("[pipeline] Data sync/prune error:", err);
-  }
-  report.timings.maintenanceMs = Date.now() - maintenanceStartedAt;
   report.timings.totalMs = Date.now() - pipelineStartedAt;
 
   console.timeEnd("pipeline-total");

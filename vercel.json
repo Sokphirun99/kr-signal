@@ -21,7 +21,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/pipeline",
+      "path": "/api/cron/verify",
       "schedule": "0 0 * * *"
     }
   ],

@@ -67,17 +67,27 @@ export function formatDisplayTime(dateInput: Date | string): string {
 
 /**
  * Calculates remaining validity duration until signal expiry.
- * Inputs: expiresAt - Date object or ISO timestamp string.
+ * Inputs: expiresAt - Date object or ISO timestamp string; status - ledger status.
  * Outputs: object with text description and urgency CSS class names.
  * Side effects: reads current timestamp (Date.now()).
- * Failure modes: returns "expired" if timestamp has passed.
+ * Failure modes: marks past-due open rows as awaiting ledger verification.
  */
-export function getTimeLeft(expiresAt: Date | string): {
+export function getTimeLeft(
+  expiresAt: Date | string,
+  status = "open"
+): {
   text: string;
   urgencyCls: string;
 } {
   const ms = parseUtcDate(expiresAt).getTime() - Date.now();
-  if (ms <= 0) return { text: "expired", urgencyCls: "text-zinc-400" };
+  if (ms <= 0) {
+    return status === "open"
+      ? {
+          text: "Awaiting verification",
+          urgencyCls: "text-amber-400",
+        }
+      : { text: "expired", urgencyCls: "text-zinc-400" };
+  }
 
   const h = Math.floor(ms / 3_600_000);
   const d = Math.floor(h / 24);

@@ -1,40 +1,64 @@
 import type { Context } from "hono";
-import { waitUntil } from "@vercel/functions";
+import { forceRunMaintenancePass } from "../engine/maintenance";
 import { forceRunPipelinePass } from "../engine/pipeline";
+import { forceRunVerificationPass } from "../engine/verification";
 import { safeCompare } from "../lib/safeCompare";
 
-/**
- * Handles incoming cron job trigger requests to execute pipeline passes.
- * Responds 202 Accepted immediately and runs the pipeline in the background
- * via Vercel's Fluid Compute `waitUntil`, so the HTTP layer never hits the
- * Hobby-tier 300s function limit.
- *
- * Inputs: c - Hono request context with Bearer authorization header.
- * Outputs: 202 JSON with `accepted` flag and `startedAt` timestamp.
- * Side effects: fires off the pipeline pass asynchronously (writes signals/scan_runs).
- * Failure modes: 500 if CRON_SECRET is unset, 401 on bad/missing bearer token.
- */
-export async function handleCronPipeline(c: Context) {
+function authorizeCron(c: Context): Response | null {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return c.json({ error: "CRON_SECRET not configured" }, 500);
   }
+
   const authHeader = c.req.header("authorization") ?? "";
-  const expectedAuth = `Bearer ${cronSecret}`;
-  if (!safeCompare(authHeader, expectedAuth)) {
+  if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
+  return null;
+}
 
-  waitUntil(
-    forceRunPipelinePass()
-      .then((report) =>
-        console.log("[cron] pass done", JSON.stringify(report)),
-      )
-      .catch((err) => console.error("[cron] pass failed", err)),
-  );
+/** Runs only lifecycle grading and returns after ledger writes are committed. */
+export async function handleCronVerification(c: Context) {
+  const authError = authorizeCron(c);
+  if (authError) return authError;
 
-  return c.json(
-    { accepted: true, startedAt: new Date().toISOString() },
-    202,
-  );
+  const report = await forceRunVerificationPass();
+  if (report.errors.length > 0) {
+    return c.json({ ok: false, report }, 503);
+  }
+  return c.json({ ok: true, report }, 200);
+}
+
+/** Runs setup discovery only; verification and maintenance have separate jobs. */
+export async function handleCronPipeline(c: Context) {
+  const authError = authorizeCron(c);
+  if (authError) return authError;
+
+  const report = await forceRunPipelinePass();
+  const criticalFailure =
+    report.failures.database > 0 ||
+    report.failures.leaseAcquisition > 0 ||
+    report.failures.leaseRelease > 0 ||
+    report.failures.heartbeat > 0 ||
+    report.failures.timeout > 0 ||
+    (report.scanTargets > 0 && report.failures.scan >= report.scanTargets) ||
+    report.timeframesScanned === 0;
+  if (criticalFailure) {
+    return c.json({ ok: false, report }, 503);
+  }
+  return c.json({ ok: true, report }, 200);
+}
+
+/** Runs non-critical news synchronization and retention cleanup. */
+export async function handleCronMaintenance(c: Context) {
+  const authError = authorizeCron(c);
+  if (authError) return authError;
+
+  try {
+    const report = await forceRunMaintenancePass();
+    return c.json({ ok: true, report }, 200);
+  } catch (error) {
+    console.error("[maintenance] pass failed", error);
+    return c.json({ ok: false, error: String(error) }, 503);
+  }
 }

@@ -10,11 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Trigger Signal Pipeline Scan
+      - name: Verify open signal lifecycles
         run: |
-          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
-            --max-time 120 --retry 2 --retry-delay 10 -X POST \
+          code=$(curl -sS -o /tmp/verify.json -w "%{http_code}" \
+            --connect-timeout 10 --max-time 90 -X POST \
+            https://kr-signal.vercel.app/api/cron/verify \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/verify.json
+          test "$code" = "200"
+
+      - name: Scan for new setups
+        run: |
+          code=$(curl -sS -o /tmp/scan.json -w "%{http_code}" \
+            --connect-timeout 10 --max-time 110 -X POST \
             https://kr-signal.vercel.app/api/cron/pipeline \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
-          echo "HTTP $code"; cat /tmp/resp.json
-          test "$code" = "202"
+          echo "HTTP $code"
+          cat /tmp/scan.json
+          test "$code" = "200"

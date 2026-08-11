@@ -15,14 +15,18 @@ export interface PipelineLeaseStore {
  * Single-statement lease operations work with Supabase transaction pooling:
  * they need neither session affinity nor a long-running transaction.
  */
-export const postgresPipelineLeaseStore: PipelineLeaseStore = {
-  async acquire(owner) {
-    const rows = await getDb().execute<{ owner: string }>(sql`
+export function createPostgresLeaseStore(
+  leaseName: string,
+  leaseMs = PIPELINE_LEASE_MS
+): PipelineLeaseStore {
+  return {
+    async acquire(owner) {
+      const rows = await getDb().execute<{ owner: string }>(sql`
       insert into private.pipeline_leases (name, owner, expires_at, updated_at)
       values (
-        ${PIPELINE_LEASE_NAME},
+        ${leaseName},
         ${owner},
-        now() + (${PIPELINE_LEASE_MS} * interval '1 millisecond'),
+        now() + (${leaseMs} * interval '1 millisecond'),
         now()
       )
       on conflict (name) do update
@@ -31,33 +35,38 @@ export const postgresPipelineLeaseStore: PipelineLeaseStore = {
             updated_at = excluded.updated_at
         where private.pipeline_leases.expires_at <= now()
       returning owner
-    `);
-    return rows.some(row => row.owner === owner);
-  },
+      `);
+      return rows.some(row => row.owner === owner);
+    },
 
-  async renew(owner) {
-    const rows = await getDb().execute<{ owner: string }>(sql`
+    async renew(owner) {
+      const rows = await getDb().execute<{ owner: string }>(sql`
       update private.pipeline_leases
-      set expires_at = now() + (${PIPELINE_LEASE_MS} * interval '1 millisecond'),
+      set expires_at = now() + (${leaseMs} * interval '1 millisecond'),
           updated_at = now()
-      where name = ${PIPELINE_LEASE_NAME}
+      where name = ${leaseName}
         and owner = ${owner}
         and expires_at > now()
       returning owner
-    `);
-    return rows.some(row => row.owner === owner);
-  },
+      `);
+      return rows.some(row => row.owner === owner);
+    },
 
-  async release(owner) {
-    const rows = await getDb().execute<{ owner: string }>(sql`
+    async release(owner) {
+      const rows = await getDb().execute<{ owner: string }>(sql`
       delete from private.pipeline_leases
-      where name = ${PIPELINE_LEASE_NAME}
+      where name = ${leaseName}
         and owner = ${owner}
       returning owner
-    `);
-    return rows.some(row => row.owner === owner);
-  },
-};
+      `);
+      return rows.some(row => row.owner === owner);
+    },
+  };
+}
+
+export const postgresPipelineLeaseStore = createPostgresLeaseStore(
+  PIPELINE_LEASE_NAME
+);
 
 export function tryAcquirePipelineLease(owner: string): Promise<boolean> {
   return postgresPipelineLeaseStore.acquire(owner);

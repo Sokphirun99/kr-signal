@@ -1,0 +1,160 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+
+const mocks = vi.hoisted(() => ({
+  verify: vi.fn(),
+  scan: vi.fn(),
+  maintenance: vi.fn(),
+}));
+
+vi.mock("../engine/verification", () => ({
+  forceRunVerificationPass: mocks.verify,
+}));
+vi.mock("../engine/pipeline", () => ({
+  forceRunPipelinePass: mocks.scan,
+}));
+vi.mock("../engine/maintenance", () => ({
+  forceRunMaintenancePass: mocks.maintenance,
+}));
+
+import app from "../boot";
+
+const auth = { Authorization: "Bearer cron-test-secret" };
+
+function verificationReport(errors: string[] = []) {
+  return {
+    errors,
+    failures: {
+      marketData: 0,
+      database: 0,
+      leaseAcquisition: 0,
+      leaseRelease: 0,
+      heartbeat: 0,
+      timeout: 0,
+    },
+  };
+}
+
+function scanReport() {
+  return {
+    scanTargets: 15,
+    timeframesScanned: 15,
+    errors: [],
+    failures: {
+      database: 0,
+      leaseAcquisition: 0,
+      leaseRelease: 0,
+      heartbeat: 0,
+      timeout: 0,
+      scan: 0,
+    },
+  };
+}
+
+beforeEach(() => {
+  process.env.CRON_SECRET = "cron-test-secret";
+  mocks.verify.mockReset();
+  mocks.scan.mockReset();
+  mocks.maintenance.mockReset();
+  mocks.verify.mockResolvedValue(verificationReport());
+  mocks.scan.mockResolvedValue(scanReport());
+  mocks.maintenance.mockResolvedValue({ errors: [] });
+});
+
+describe("cron lifecycle isolation", () => {
+  it("protects every cron endpoint with CRON_SECRET", async () => {
+    for (const path of [
+      "/api/cron/verify",
+      "/api/cron/pipeline",
+      "/api/cron/maintenance",
+    ]) {
+      const response = await app.request(path, { method: "POST" });
+      expect(response.status).toBe(401);
+    }
+  });
+
+  it("awaits committed verification before returning success", async () => {
+    let finishVerification!: (
+      report: ReturnType<typeof verificationReport>
+    ) => void;
+    mocks.verify.mockReturnValue(
+      new Promise(resolve => {
+        finishVerification = resolve;
+      })
+    );
+    let settled = false;
+    const request = Promise.resolve(
+      app.request("/api/cron/verify", { method: "POST", headers: auth })
+    ).then(response => {
+      settled = true;
+      return response;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finishVerification(verificationReport());
+
+    const response = await request;
+    expect(response.status).toBe(200);
+    expect(mocks.scan).not.toHaveBeenCalled();
+  });
+
+  it("returns a scheduler-visible failure when verification is incomplete", async () => {
+    mocks.verify.mockResolvedValue(
+      verificationReport(["market data unavailable"])
+    );
+
+    const response = await app.request("/api/cron/verify", {
+      method: "POST",
+      headers: auth,
+    });
+
+    expect(response.status).toBe(503);
+  });
+
+  it("lets verification finish while an independent scan is still running", async () => {
+    let finishScan!: (report: ReturnType<typeof scanReport>) => void;
+    mocks.scan.mockReturnValue(
+      new Promise(resolve => {
+        finishScan = resolve;
+      })
+    );
+    const scanRequest = app.request("/api/cron/pipeline", {
+      method: "POST",
+      headers: auth,
+    });
+
+    const verificationResponse = await app.request("/api/cron/verify", {
+      method: "POST",
+      headers: auth,
+    });
+    expect(verificationResponse.status).toBe(200);
+
+    finishScan(scanReport());
+    expect((await scanRequest).status).toBe(200);
+  });
+
+  it("schedules verification before scanning without overlapping retries", () => {
+    const workflow = readFileSync(
+      new URL("../../.github/workflows/cron-scan.yml", import.meta.url),
+      "utf8"
+    );
+
+    expect(workflow.indexOf("/api/cron/verify")).toBeLessThan(
+      workflow.indexOf("/api/cron/pipeline")
+    );
+    expect(workflow).not.toContain("--retry");
+    expect(workflow.match(/test "\$code" = "200"/g)).toHaveLength(2);
+  });
+
+  it("keeps verification and maintenance out of the scan pipeline", () => {
+    const pipeline = readFileSync(
+      new URL("../engine/pipeline.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(pipeline).not.toContain("verifySignal");
+    expect(pipeline).not.toContain("getNews");
+    expect(pipeline).toContain("PIPELINE_TIMEOUT_MS = 75_000");
+  });
+});

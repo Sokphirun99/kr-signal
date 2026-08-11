@@ -44,7 +44,10 @@ export function SignalCard({ signal: rawSignal }: SignalCardProps) {
   const decimals = inst?.decimals ?? 2;
   const isBuy = signal.side === "buy";
   const rMult = typeof signal.rMultiple === "number" ? Number(signal.rMultiple) : null;
-  const { text: urgencyText, urgencyCls } = getTimeLeft(signal.expiresAt);
+  const { text: urgencyText, urgencyCls } = getTimeLeft(
+    signal.expiresAt,
+    signal.status
+  );
 
   const handleCopy = async (format: ExportFormat) => {
     setCopiedFormat(format);

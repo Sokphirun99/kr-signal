@@ -5,7 +5,7 @@ import app from "../dist/boot.js";
 
 const vercelHandler = handle(app);
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export default async function (req: IncomingMessage, res: ServerResponse) {
   try {

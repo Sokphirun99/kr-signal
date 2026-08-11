@@ -5,7 +5,11 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext, disableResponseCache } from "./context";
 import { env } from "./lib/env";
-import { handleCronPipeline } from "./routes/cron";
+import {
+  handleCronMaintenance,
+  handleCronPipeline,
+  handleCronVerification,
+} from "./routes/cron";
 import { publicApi } from "./routes/publicApi";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -16,6 +20,10 @@ app.get("/api/health", c => c.json({ ok: true }));
 
 app.get("/api/cron/pipeline", handleCronPipeline);
 app.post("/api/cron/pipeline", handleCronPipeline);
+app.get("/api/cron/verify", handleCronVerification);
+app.post("/api/cron/verify", handleCronVerification);
+app.get("/api/cron/maintenance", handleCronMaintenance);
+app.post("/api/cron/maintenance", handleCronMaintenance);
 app.get("/api/scan", handleCronPipeline);
 app.post("/api/scan", handleCronPipeline);
 

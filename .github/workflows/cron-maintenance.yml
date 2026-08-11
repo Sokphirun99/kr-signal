@@ -1,0 +1,21 @@
+name: Daily Pipeline Maintenance
+
+on:
+  schedule:
+    - cron: "15 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Sync news and prune rolling data
+        run: |
+          code=$(curl -sS -o /tmp/maintenance.json -w "%{http_code}" \
+            --connect-timeout 10 --max-time 100 -X POST \
+            https://kr-signal.vercel.app/api/cron/maintenance \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/maintenance.json
+          test "$code" = "200"
