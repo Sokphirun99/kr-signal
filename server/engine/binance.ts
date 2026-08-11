@@ -34,13 +34,23 @@ const FUTURES_HOSTS = ["https://fapi.binance.com"];
 
 async function fetchJson<T>(
   source: MarketDataSource,
-  path: string
+  path: string,
+  parentSignal?: AbortSignal
 ): Promise<T> {
   let lastErr: unknown;
   const hosts = source === "futures" ? FUTURES_HOSTS : SPOT_HOSTS;
   for (const host of hosts) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const abortFromParent = () => controller.abort(parentSignal?.reason);
+    if (parentSignal?.aborted) {
+      abortFromParent();
+    } else {
+      parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+    }
+    const timer = setTimeout(
+      () => controller.abort(new Error("Binance request timed out.")),
+      TIMEOUT_MS
+    );
     try {
       const res = await fetch(`${host}${path}`, { signal: controller.signal });
       if (!res.ok)
@@ -50,6 +60,7 @@ async function fetchJson<T>(
       lastErr = err;
     } finally {
       clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abortFromParent);
     }
   }
   throw lastErr ?? new Error(`Failed to fetch ${path} from all Binance hosts`);
@@ -64,11 +75,13 @@ export async function fetchKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
-  source: MarketDataSource = "spot"
+  source: MarketDataSource = "spot",
+  signal?: AbortSignal
 ): Promise<Candle[]> {
   const raw = await fetchJson<unknown[][]>(
     source,
-    `${source === "futures" ? "/fapi/v1/klines" : "/api/v3/klines"}?symbol=${pair}&interval=${interval}&limit=${limit}`
+    `${source === "futures" ? "/fapi/v1/klines" : "/api/v3/klines"}?symbol=${pair}&interval=${interval}&limit=${limit}`,
+    signal
   );
   const candles = raw.map(k => ({
     openTime: Number(k[0]),
@@ -117,7 +130,8 @@ export async function fetchClosedKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
-  source: MarketDataSource = "spot"
+  source: MarketDataSource = "spot",
+  signal?: AbortSignal
 ): Promise<Candle[]> {
   const cacheKey = `${source}:${pair}:${interval}:${limit}`;
   const cached = klineCache.get(cacheKey);
@@ -125,7 +139,7 @@ export async function fetchClosedKlines(
     return cached.candles;
   }
 
-  const candles = await fetchKlines(pair, interval, limit, source);
+  const candles = await fetchKlines(pair, interval, limit, source, signal);
   const tfMs = { "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000 }[interval];
   const now = Date.now();
   const closed = candles.filter(c => c.openTime + tfMs <= now);
@@ -139,7 +153,8 @@ export async function fetchActiveKlines(
   pair: string,
   interval: "15m" | "1h" | "4h",
   limit = 300,
-  source: MarketDataSource = "spot"
+  source: MarketDataSource = "spot",
+  signal?: AbortSignal
 ): Promise<Candle[]> {
   const cacheKey = `active:${source}:${pair}:${interval}:${limit}`;
   const cached = klineCache.get(cacheKey);
@@ -147,7 +162,7 @@ export async function fetchActiveKlines(
     return cached.candles;
   }
 
-  const candles = await fetchKlines(pair, interval, limit, source);
+  const candles = await fetchKlines(pair, interval, limit, source, signal);
   klineCache.set(cacheKey, { candles, fetchedAt: Date.now() });
   return candles;
 }

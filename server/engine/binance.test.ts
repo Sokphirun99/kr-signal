@@ -38,6 +38,31 @@ describe("Binance product routing", () => {
     );
   });
 
+  it("propagates a pipeline abort into an in-flight kline request", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_input, init) => {
+      const signal = init?.signal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchKlines(
+      "BTCUSDT",
+      "15m",
+      300,
+      "futures",
+      controller.signal
+    );
+    controller.abort(new Error("pipeline deadline reached"));
+
+    await expect(request).rejects.toThrow("pipeline deadline reached");
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+
   it("can fetch a mixed futures/spot ticker tape", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

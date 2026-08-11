@@ -12,10 +12,25 @@ jobs:
     steps:
       - name: Sync news and prune rolling data
         run: |
+          set +e
           code=$(curl -sS -o /tmp/maintenance.json -w "%{http_code}" \
             --connect-timeout 10 --max-time 100 -X POST \
             https://kr-signal.vercel.app/api/cron/maintenance \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          curl_exit=$?
+          set -e
+          echo "curl exit $curl_exit"
           echo "HTTP $code"
-          cat /tmp/maintenance.json
-          test "$code" = "200"
+          if test -s /tmp/maintenance.json; then
+            cat /tmp/maintenance.json
+          else
+            echo "No response body received"
+          fi
+          if test "$curl_exit" != "0"; then
+            echo "::error title=Maintenance request failed::curl exit $curl_exit before an HTTP response was received"
+            exit "$curl_exit"
+          fi
+          if test "$code" != "200"; then
+            echo "::error title=Maintenance returned HTTP $code::See the JSON response and Vercel runtime logs"
+            exit 1
+          fi

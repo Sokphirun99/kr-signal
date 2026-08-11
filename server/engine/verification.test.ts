@@ -108,7 +108,7 @@ describe("independent lifecycle verification", () => {
     expect(first.openSignals).toBe(1);
     expect(first.staleOpenSignals).toBe(1);
     expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining("1 open signal(s) passed")
+      expect.stringContaining("verification.stale_open_signals")
     );
     expect(first.verified).toBe(1);
     expect(first.closed).toBe(1);

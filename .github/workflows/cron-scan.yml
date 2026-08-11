@@ -12,20 +12,50 @@ jobs:
     steps:
       - name: Verify open signal lifecycles
         run: |
+          set +e
           code=$(curl -sS -o /tmp/verify.json -w "%{http_code}" \
             --connect-timeout 10 --max-time 90 -X POST \
             https://kr-signal.vercel.app/api/cron/verify \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          curl_exit=$?
+          set -e
+          echo "curl exit $curl_exit"
           echo "HTTP $code"
-          cat /tmp/verify.json
-          test "$code" = "200"
+          if test -s /tmp/verify.json; then
+            cat /tmp/verify.json
+          else
+            echo "No response body received"
+          fi
+          if test "$curl_exit" != "0"; then
+            echo "::error title=Verification request failed::curl exit $curl_exit before an HTTP response was received"
+            exit "$curl_exit"
+          fi
+          if test "$code" != "200"; then
+            echo "::error title=Verification returned HTTP $code::See the JSON response and Vercel runtime logs"
+            exit 1
+          fi
 
       - name: Scan for new setups
         run: |
+          set +e
           code=$(curl -sS -o /tmp/scan.json -w "%{http_code}" \
             --connect-timeout 10 --max-time 110 -X POST \
             https://kr-signal.vercel.app/api/cron/pipeline \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          curl_exit=$?
+          set -e
+          echo "curl exit $curl_exit"
           echo "HTTP $code"
-          cat /tmp/scan.json
-          test "$code" = "200"
+          if test -s /tmp/scan.json; then
+            cat /tmp/scan.json
+          else
+            echo "No response body received"
+          fi
+          if test "$curl_exit" != "0"; then
+            echo "::error title=Pipeline request failed::curl exit $curl_exit before an HTTP response was received"
+            exit "$curl_exit"
+          fi
+          if test "$code" != "200"; then
+            echo "::error title=Pipeline returned HTTP $code::See the JSON response and Vercel runtime logs"
+            exit 1
+          fi

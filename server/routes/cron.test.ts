@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 const mocks = vi.hoisted(() => ({
@@ -23,6 +23,8 @@ const auth = { Authorization: "Bearer cron-test-secret" };
 
 function verificationReport(errors: string[] = []) {
   return {
+    openSignals: 1,
+    closed: 0,
     errors,
     failures: {
       marketData: 0,
@@ -59,6 +61,11 @@ beforeEach(() => {
   mocks.verify.mockResolvedValue(verificationReport());
   mocks.scan.mockResolvedValue(scanReport());
   mocks.maintenance.mockResolvedValue({ errors: [] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("cron lifecycle isolation", () => {
@@ -112,6 +119,33 @@ describe("cron lifecycle isolation", () => {
     expect(response.status).toBe(503);
   });
 
+  it("returns a JSON 504 before Vercel can terminate a stuck verifier", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let finishVerification!: (
+      report: ReturnType<typeof verificationReport>
+    ) => void;
+    mocks.verify.mockReturnValue(
+      new Promise(resolve => {
+        finishVerification = resolve;
+      })
+    );
+    const request = Promise.resolve(
+      app.request("/api/cron/verify", { method: "POST", headers: auth })
+    );
+
+    await vi.advanceTimersByTimeAsync(55_000);
+    const response = await request;
+    const body = (await response.json()) as {
+      error?: { code?: string; message?: string };
+    };
+
+    expect(response.status).toBe(504);
+    expect(body.error?.code).toBe("CRON_RESPONSE_TIMEOUT");
+    expect(body.error?.message).toContain("55000ms");
+    finishVerification(verificationReport());
+  });
+
   it("lets verification finish while an independent scan is still running", async () => {
     let finishScan!: (report: ReturnType<typeof scanReport>) => void;
     mocks.scan.mockReturnValue(
@@ -144,7 +178,9 @@ describe("cron lifecycle isolation", () => {
       workflow.indexOf("/api/cron/pipeline")
     );
     expect(workflow).not.toContain("--retry");
-    expect(workflow.match(/test "\$code" = "200"/g)).toHaveLength(2);
+    expect(workflow.match(/if test "\$code" != "200"/g)).toHaveLength(2);
+    expect(workflow.match(/curl_exit=\$\?/g)).toHaveLength(2);
+    expect(workflow.match(/::error title=/g)).toHaveLength(4);
   });
 
   it("keeps verification and maintenance out of the scan pipeline", () => {

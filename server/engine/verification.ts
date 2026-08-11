@@ -161,6 +161,21 @@ function assertVerificationActive(signal?: AbortSignal): void {
   }
 }
 
+function logVerification(
+  event: string,
+  details: Record<string, unknown> = {},
+  level: "info" | "warn" | "error" = "info"
+): void {
+  const payload = JSON.stringify({
+    level,
+    event: `verification.${event}`,
+    ...details,
+  });
+  if (level === "error") console.error(payload);
+  else if (level === "warn") console.warn(payload);
+  else console.log(payload);
+}
+
 export async function runVerificationPass(
   signal?: AbortSignal,
   dependencies: VerificationDependencies = {}
@@ -173,8 +188,14 @@ export async function runVerificationPass(
   const engineConfig = getEngineConfigSnapshot().config;
   const klineCache = new Map<string, Promise<Candle[]>>();
 
-  console.log("[verification] pass started");
+  logVerification("pass_started");
+  const openSignalQueryStartedAt = Date.now();
+  logVerification("open_signals_query_started");
   const openSignals = await store.listOpenSignals();
+  logVerification("open_signals_query_completed", {
+    ms: Date.now() - openSignalQueryStartedAt,
+    count: openSignals.length,
+  });
   report.openSignals = openSignals.length;
   report.staleOpenSignals = openSignals.filter(
     sig =>
@@ -186,8 +207,10 @@ export async function runVerificationPass(
       ).getTime() <= now()
   ).length;
   if (report.staleOpenSignals > 0) {
-    console.warn(
-      `[verification] ${report.staleOpenSignals} open signal(s) passed their effective expiry before this pass`
+    logVerification(
+      "stale_open_signals",
+      { count: report.staleOpenSignals },
+      "warn"
     );
   }
 
@@ -204,12 +227,21 @@ export async function runVerificationPass(
           instrument.pair,
           openSignal.timeframe as Timeframe,
           300,
-          instrument.dataSource
+          instrument.dataSource,
+          signal
         )
       );
     }
   }
-  await Promise.allSettled(klineCache.values());
+  const marketDataStartedAt = Date.now();
+  logVerification("market_data_started", { feeds: klineCache.size });
+  const marketDataResults = await Promise.allSettled(klineCache.values());
+  logVerification("market_data_completed", {
+    ms: Date.now() - marketDataStartedAt,
+    feeds: klineCache.size,
+    failures: marketDataResults.filter(result => result.status === "rejected")
+      .length,
+  });
   assertVerificationActive(signal);
 
   for (const openSignal of openSignals) {
@@ -248,6 +280,14 @@ export async function runVerificationPass(
     }
 
     const verdict = verifySignal(openSignal, candles, engineConfig);
+    logVerification("signal_graded", {
+      signalId: openSignal.id,
+      symbol: openSignal.symbol,
+      timeframe: openSignal.timeframe,
+      previousStatus: openSignal.status,
+      verdictStatus: verdict.status,
+      eventCount: verdict.events.length,
+    });
     report.verified++;
     const signalChanged =
       verdict.status !== "open" ||
@@ -282,7 +322,13 @@ export async function runVerificationPass(
 
   report.completedAt = new Date();
   report.timings.totalMs = Date.now() - startedAtMs;
-  console.log("[verification] pass completed", JSON.stringify(report));
+  logVerification("pass_completed", {
+    ms: report.timings.totalMs,
+    openSignals: report.openSignals,
+    verified: report.verified,
+    closed: report.closed,
+    errors: report.errors.length,
+  });
   return report;
 }
 
@@ -297,16 +343,19 @@ export async function forceRunVerificationPass(): Promise<VerificationReport> {
   }
 
   verificationRunning = true;
+  logVerification("lease_requested");
   try {
     return await runWithPipelineLease(
       randomUUID(),
-      leaseSignal =>
-        runWithAbortDeadline(
+      leaseSignal => {
+        logVerification("lease_acquired");
+        return runWithAbortDeadline(
           leaseSignal,
           VERIFICATION_TIMEOUT_MS,
           "Verification pass",
           verificationSignal => runVerificationPass(verificationSignal)
-        ),
+        );
+      },
       { store: verificationLeaseStore, heartbeatMs: 30_000 }
     );
   } catch (error) {
@@ -328,7 +377,7 @@ export async function forceRunVerificationPass(): Promise<VerificationReport> {
       report.failures.database++;
     }
     report.errors.push(String(error));
-    console.error("[verification] pass failed", error);
+    logVerification("pass_failed", { error: String(error) }, "error");
     return report;
   } finally {
     verificationRunning = false;

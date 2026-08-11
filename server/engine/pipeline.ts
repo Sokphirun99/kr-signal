@@ -184,7 +184,10 @@ export async function runPipeline(
   ): Promise<Candle[]> {
     const key = `${source}:${pair}:${tf}`;
     if (!closedKlineCache.has(key)) {
-      closedKlineCache.set(key, fetchClosedKlines(pair, tf, 300, source));
+      closedKlineCache.set(
+        key,
+        fetchClosedKlines(pair, tf, 300, source, signal)
+      );
     }
     return closedKlineCache.get(key)!;
   }
@@ -295,10 +298,7 @@ export async function runPipeline(
                   if (fundingNote) note = fundingNote;
 
                   let strategyContext: Record<string, unknown> = setup.context;
-                  if (
-                    instrument.market === "crypto" &&
-                    isAiForecastEnabled()
-                  ) {
+                  if (instrument.market === "crypto" && isAiForecastEnabled()) {
                     try {
                       const forecastCandles =
                         candles.length >= AI_FORECAST_CONTEXT_CANDLES
@@ -307,7 +307,8 @@ export async function runPipeline(
                               instrument.pair,
                               timeframe,
                               600,
-                              instrument.dataSource
+                              instrument.dataSource,
+                              signal
                             );
                       const aiForecast = await getAiForecast(
                         {
