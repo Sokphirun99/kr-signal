@@ -104,45 +104,50 @@ export const TF_MS: Record<Timeframe, number> = {
   "4h": 4 * 60 * 60_000,
 };
 
-/** Default validity for slower proxy markets (gold and forex). */
+/**
+ * Validity duration across all markets.
+ * Setups correspond to 12–16 candles across all supported timeframes:
+ * - 15m: 4 hours (16 candles)
+ * - 1h: 12 hours (12 candles)
+ * - 4h: 48 hours (12 candles / 2 days)
+ */
 export const EXPIRY_MS: Record<Timeframe, number> = {
-  "15m": 8 * 60 * 60_000, // 8 hours
-  "1h": 24 * 60 * 60_000, // 1 day
-  "4h": 4 * 24 * 60 * 60_000, // 4 days
-};
-
-/** Shorter validity for crypto, where setups become stale more quickly. */
-export const CRYPTO_EXPIRY_MS: Record<Timeframe, number> = {
   "15m": 4 * 60 * 60_000, // 4 hours
   "1h": 12 * 60 * 60_000, // 12 hours
   "4h": 2 * 24 * 60 * 60_000, // 48 hours
 };
 
+/** Legacy validity windows used prior to policy standardization. */
+export const LEGACY_EXPIRY_MS: Record<Timeframe, number> = {
+  "15m": 8 * 60 * 60_000, // 8 hours
+  "1h": 24 * 60 * 60_000, // 1 day (24 hours)
+  "4h": 4 * 24 * 60 * 60_000, // 4 days (96 hours)
+};
+
+/** Alias for backward compatibility / explicit crypto referencing. */
+export const CRYPTO_EXPIRY_MS: Record<Timeframe, number> = EXPIRY_MS;
+
 /** Returns the publication-time validity window for a market/timeframe pair. */
 export function getSignalExpiryMs(
-  market: Market,
+  _market: Market,
   timeframe: Timeframe
 ): number {
-  return market === "crypto"
-    ? CRYPTO_EXPIRY_MS[timeframe]
-    : EXPIRY_MS[timeframe];
+  return EXPIRY_MS[timeframe];
 }
 
 /**
- * Caps a stored expiry at the current market policy. This lets existing open
- * signals adopt shorter windows without ever extending an older deadline.
+ * Caps a stored expiry at the current market policy window.
+ * This lets existing open signals adopt shorter windows without ever extending an older deadline.
  */
 export function getEffectiveSignalExpiry(
-  market: Market,
+  _market: Market,
   timeframe: Timeframe,
   openedAt: Date,
   storedExpiresAt: Date
 ): Date {
-  if (market !== "crypto") return storedExpiresAt;
-
   const storedDuration = storedExpiresAt.getTime() - openedAt.getTime();
-  const legacyDuration = EXPIRY_MS[timeframe];
-  const currentDuration = CRYPTO_EXPIRY_MS[timeframe];
+  const legacyDuration = LEGACY_EXPIRY_MS[timeframe];
+  const currentDuration = EXPIRY_MS[timeframe];
   const migrationToleranceMs = 5 * 60_000;
   const usesLegacyWindow =
     storedDuration > currentDuration &&
