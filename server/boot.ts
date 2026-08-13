@@ -15,7 +15,8 @@ import { publicApi } from "./routes/publicApi";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
-app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+// Keep the general request budget small. tRPC has its own stricter limit below.
+app.use(bodyLimit({ maxSize: 1024 * 1024 }));
 
 app.get("/api/health", c => c.json({ ok: true }));
 

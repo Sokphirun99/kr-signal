@@ -190,6 +190,12 @@ describe("cron lifecycle isolation", () => {
     expect(workflow.match(/curl_exit=\$\?/g)).toHaveLength(2);
     expect(workflow.match(/::error title=/g)).toHaveLength(4);
     expect(workflow).not.toContain("cat /tmp/");
+
+    const vercelConfig = readFileSync(
+      new URL("../../vercel.json", import.meta.url),
+      "utf8"
+    );
+    expect(vercelConfig).not.toContain('"crons"');
   });
 
   it("keeps verification and maintenance out of the scan pipeline", () => {

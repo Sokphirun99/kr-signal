@@ -34,6 +34,31 @@ export function isAiForecastEnabled(): boolean {
   return process.env.HF_AI_FORECASTS?.toLowerCase() !== "off";
 }
 
+function logAiForecast(
+  level: "info" | "warn",
+  event: string,
+  details: Record<string, unknown>,
+): void {
+  const payload = JSON.stringify({
+    level,
+    event: `ai_forecast.${event}`,
+    ...details,
+  });
+  if (level === "warn") console.warn(payload);
+  else console.log(payload);
+}
+
+function errorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "unknown";
+  if (message.includes("timed out")) return "timeout";
+  if (message.includes("HTTP")) return "upstream_http_error";
+  if (message.includes("invalid") || message.includes("another market")) {
+    return "invalid_upstream_response";
+  }
+  if (message.includes("authentication")) return "configuration";
+  return "request_failed";
+}
+
 function normalizeSpaceUrl(rawUrl: string): string {
   const url = new URL(rawUrl);
   if (url.protocol !== "https:") {
@@ -147,9 +172,27 @@ export async function getAiForecast(
   options: AiForecastOptions = {}
 ): Promise<AiForecastSnapshot | null> {
   if (!isAiForecastEnabled()) return null;
+  const startedAt = Date.now();
   try {
-    return await requestAiForecast(input, options);
-  } catch {
+    const snapshot = await requestAiForecast(input, options);
+    logAiForecast("info", "completed", {
+      symbol: input.symbol,
+      timeframe: input.timeframe,
+      candleCount: input.candles.length,
+      durationMs: Date.now() - startedAt,
+      modelRevision: snapshot.modelRevision,
+    });
+    return snapshot;
+  } catch (error) {
+    // Keep this boundary fail-open: rule signals remain publishable when the
+    // optional Space is sleeping, unavailable, or returns invalid output.
+    logAiForecast("warn", "failed", {
+      symbol: input.symbol,
+      timeframe: input.timeframe,
+      candleCount: input.candles.length,
+      durationMs: Date.now() - startedAt,
+      errorCode: errorCode(error),
+    });
     return null;
   }
 }
