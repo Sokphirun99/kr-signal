@@ -19,12 +19,6 @@
       ]
     }
   ],
-  "crons": [
-    {
-      "path": "/api/cron/verify",
-      "schedule": "0 0 * * *"
-    }
-  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }

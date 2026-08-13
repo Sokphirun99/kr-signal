@@ -1,7 +1,10 @@
 /**
  * In-memory sliding-window rate limiter for public API keys.
  *
- * Note: per-instance on serverless (best effort, not exact) — acceptable for v1.
+ * Note: Vercel Functions do not share this memory across instances. The map is
+ * bounded to prevent an attacker from turning arbitrary API keys into an
+ * unbounded memory allocation. Platform-wide enforcement should be configured
+ * with Vercel Firewall when a project plan supports custom rate-limit rules.
  */
 
 export interface RateLimitResult {
@@ -13,16 +16,19 @@ export interface RateLimitResult {
 export interface RateLimiterOptions {
   windowMs?: number;
   maxRequests?: number;
+  maxKeys?: number;
 }
 
 export class SlidingWindowRateLimiter {
   private readonly windowMs: number;
   private readonly maxRequests: number;
+  private readonly maxKeys: number;
   private readonly storage = new Map<string, number[]>();
 
   constructor(options: RateLimiterOptions = {}) {
     this.windowMs = options.windowMs ?? 60 * 1000;
     this.maxRequests = options.maxRequests ?? 60;
+    this.maxKeys = options.maxKeys ?? 10_000;
   }
 
   /**
@@ -45,6 +51,10 @@ export class SlidingWindowRateLimiter {
     }
 
     timestamps.push(now);
+    if (!this.storage.has(key) && this.storage.size >= this.maxKeys) {
+      const oldestKey = this.storage.keys().next().value;
+      if (oldestKey !== undefined) this.storage.delete(oldestKey);
+    }
     this.storage.set(key, timestamps);
     return {
       allowed: true,

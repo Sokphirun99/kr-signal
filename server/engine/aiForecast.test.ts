@@ -100,6 +100,7 @@ describe("Hugging Face AI forecast client", () => {
   });
 
   it("returns null when the optional Space is unavailable", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fetchImpl = vi.fn().mockRejectedValue(new Error("space sleeping"));
     await expect(
       getAiForecast(
@@ -107,6 +108,11 @@ describe("Hugging Face AI forecast client", () => {
         { fetchImpl, spaceUrl: "https://example.hf.space" }
       )
     ).resolves.toBeNull();
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('"event":"ai_forecast.failed"'));
+    const log = String(warning.mock.calls[0]?.[0]);
+    expect(log).not.toContain("test-shared-secret");
+    expect(log).not.toContain("openTime");
+    warning.mockRestore();
   });
 
   it("does not call the Space when forecasts are disabled", async () => {

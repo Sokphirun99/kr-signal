@@ -52,5 +52,10 @@ The dry run must show `20260805000000_schema_baseline` and
 `20260810032541_signal_provenance_and_events` remains applied. Stop if the
 preview differs. Never run `supabase db reset --linked` against production.
 
+After applying, verify the migration history and constraints through the
+Supabase project tools or SQL editor. The expected numeric constraint names are
+`signals_finite_levels_check`, `signals_risk_geometry_check`,
+`signals_finite_results_check`, and `signal_events_finite_price_check`.
+
 For a new or local database, `supabase db reset --local` replays the complete
 canonical history. This reset is permitted only for an empty/local database.

@@ -125,6 +125,8 @@ publicApi.use("*", async (c, next) => {
   }
 
   const rateResult = publicApiRateLimiter.check(authResult.key);
+  c.header("X-RateLimit-Limit", "60");
+  c.header("X-RateLimit-Remaining", String(rateResult.remaining ?? 0));
   if (!rateResult.allowed) {
     const retryAfterSeconds = rateResult.retryAfter ?? 60;
     c.header("Retry-After", String(retryAfterSeconds));

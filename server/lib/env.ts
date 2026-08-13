@@ -1,19 +1,36 @@
 import "dotenv/config";
 
-const databaseUrl = process.env.DATABASE_URL;
-const appSecret = process.env.APP_SECRET;
-
-if (!databaseUrl) {
-  console.error(
-    "[FATAL] DATABASE_URL is not set. " +
-      "Set it in Vercel → Settings → Environment Variables and redeploy.",
-  );
+function isEnabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() !== "off";
 }
 
-if (process.env.NODE_ENV === "production" && !appSecret) {
-  throw new Error(
-    "[FATAL] APP_SECRET is not set. Set it in Vercel → Settings → Environment Variables and redeploy.",
-  );
+export function missingProductionEnv(
+  environment: NodeJS.ProcessEnv = process.env,
+): string[] {
+  return [
+    !environment.DATABASE_URL && "DATABASE_URL",
+    !environment.APP_SECRET && "APP_SECRET",
+    !environment.CRON_SECRET && "CRON_SECRET",
+    isEnabled(environment.HF_AI_FORECASTS) &&
+      !environment.HF_AI_SHARED_SECRET &&
+      "HF_AI_SHARED_SECRET (required when HF_AI_FORECASTS is enabled)",
+  ].filter((name): name is string => Boolean(name));
+}
+
+const databaseUrl = process.env.DATABASE_URL;
+const appSecret = process.env.APP_SECRET;
+const cronSecret = process.env.CRON_SECRET;
+
+if (process.env.NODE_ENV === "production") {
+  const missing = missingProductionEnv();
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[FATAL] Missing production environment variable(s): ${missing.join(
+        ", "
+      )}. Configure them in Vercel and redeploy.`,
+    );
+  }
 }
 
 export const env = {
@@ -21,4 +38,5 @@ export const env = {
   appSecret: appSecret || "",
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: databaseUrl || "",
+  cronSecret: cronSecret || "",
 };

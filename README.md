@@ -88,10 +88,12 @@ npm run dev
 Relevant environment variables:
 
 ```text
-DATABASE_URL   required for server/database work
-APP_SECRET     required in production
-CRON_SECRET    required by POST /api/cron/pipeline
-APP_ID         optional; defaults to kr-signal
+DATABASE_URL        required in production and for server/database work
+APP_SECRET          required in production
+CRON_SECRET         required in production and by cron endpoints
+HF_AI_FORECASTS     optional; enabled unless set to `off`
+HF_AI_SHARED_SECRET required in production when HF_AI_FORECASTS is enabled
+APP_ID              optional; defaults to kr-signal
 ```
 
 Apply the canonical `supabase/migrations` history before deploying server code
@@ -110,3 +112,10 @@ npm run build
 The deterministic tests cover strategy geometry, gate behavior, lifecycle
 grading, R-multiple calculations, status semantics, database-error
 classification, and market-source routing.
+
+GitHub Actions is the only scheduler. The scan workflow runs every 30 minutes
+and maintenance runs daily; Vercel cron configuration is intentionally absent.
+The public API has a bounded per-instance fallback limiter with standard rate
+limit headers. Vercel Functions do not share memory across instances, so
+platform-wide enforcement still requires an available Vercel Firewall rule or
+another shared rate-limit service.
